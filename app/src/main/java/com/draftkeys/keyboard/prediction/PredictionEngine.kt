@@ -7,17 +7,10 @@ import kotlinx.coroutines.withContext
 /**
  * PredictionEngine — word completion, autocorrect, and next-word prediction.
  *
- * Improvements over v1:
- *
- * **Autocorrect** now uses keyboard-adjacency-weighted Damerau–Levenshtein distance:
- *  - Adjacent-key substitutions cost 0.5 instead of 1.0 (e.g. m→n, i→o, q→w).
- *  - Transpositions cost 0.5 (e.g. teh→the, adn→and).
- *  - Search depth increased to distance ≤ 1.5 (catches 2-edit common typos cheaply).
- *  This dramatically improves correction of fat-finger errors and near-miss swipes.
- *
- * **Next-word bigrams** expanded from ~40 to ~200 common English pairs.
- *
- * **Prefix completion** unchanged — already fast and correct.
+ * This uses a high-performance Trie-based Damerau-Levenshtein automaton.
+ * Instead of calculating the edit distance against every word in the dictionary independently,
+ * it traverses the `WordTrie` and calculates the DP matrix rows incrementally,
+ * heavily pruning branches that exceed the error threshold.
  */
 class PredictionEngine(
     private val dictionary: WordDictionary,
@@ -44,7 +37,6 @@ class PredictionEngine(
         "its" to "it's",
         "ot" to "to", "tto" to "too",
         "bcuz" to "because", "cuz" to "because",
-        // Common spelling mistakes (safe — these words don't exist on their own)
         "recieve"    to "receive",     "seperate"   to "separate",
         "occured"    to "occurred",    "occuring"   to "occurring",
         "untill"     to "until",       "definately" to "definitely",
@@ -71,13 +63,9 @@ class PredictionEngine(
         "thier"      to "their",
         "youre"      to "you're",      "theyre"     to "they're",
         "weve"       to "we've"
-        // NOTE: 'form', 'were', 'id', 'r', 'u', 'alright' deliberately
-        // NOT included — they are all valid standalone English words/identifiers
-        // and autocorrecting them causes far more harm than good.
     )
 
     // ── QWERTY keyboard adjacency map ─────────────────────────────────────────
-    // Used to assign cheaper substitution cost for adjacent-key typos.
     private val ADJACENT: Map<Char, Set<Char>> = mapOf(
         'q' to setOf('w', 'a', 's'),
         'w' to setOf('q', 'e', 'a', 's', 'd'),
@@ -109,10 +97,6 @@ class PredictionEngine(
 
     // ── Prefix completion ─────────────────────────────────────────────────────
 
-    /**
-     * Returns up to [maxResults] word suggestions starting with [prefix].
-     * Personal words sorted to the top; remaining from the frequency-ordered dictionary.
-     */
     suspend fun getSuggestions(
         prefix: String,
         maxResults: Int = 3
@@ -125,28 +109,48 @@ class PredictionEngine(
             .sortedByDescending { it.frequency }
             .map { it.word }
 
-        val dictMatches = dictionary.words
-            .asSequence()
-            .filter { it.startsWith(pfx) && it !in personal }
-            .take(maxResults * 5)
-            .toList()
+        // Fast prefix search using Trie
+        val dictMatches = mutableListOf<String>()
+        var current = dictionary.trie.root
+        var foundPrefix = true
+        for (char in pfx) {
+            val child = current.children[char]
+            if (child == null) {
+                foundPrefix = false
+                break
+            }
+            current = child
+        }
+        
+        if (foundPrefix) {
+            fun collectWords(node: TrieNode, wordSoFar: String) {
+                if (dictMatches.size >= maxResults * 5) return
+                if (node.isWord) dictMatches.add(wordSoFar)
+                for ((char, child) in node.children) {
+                    collectWords(child, wordSoFar + char)
+                }
+            }
+            collectWords(current, pfx)
+        }
+        
+        // Sort dictMatches by language model probability
+        val sortedDictMatches = dictMatches
+            .filter { it !in personal }
+            .sortedByDescending { word ->
+                // fetch probability by traversing again (fast enough)
+                var n = dictionary.trie.root
+                for (c in word) n = n.children[c]!!
+                n.probability
+            }
 
         val exactTypo = commonTypos[pfx]
         val typoMatch = if (exactTypo != null) listOf(preserveCase(prefix, exactTypo)) else emptyList()
 
-        (typoMatch + personal + dictMatches).distinct().take(maxResults)
+        (typoMatch + personal + sortedDictMatches).distinct().take(maxResults)
     }
 
     // ── Autocorrect ───────────────────────────────────────────────────────────
 
-    /**
-     * Returns the corrected version of [word] or null if no correction needed.
-     *
-     * Check order:
-     *  1. Hardcoded common-typo map (instant).
-     *  2. Word is valid in dictionary or personal words → no correction.
-     *  3. Adjacency-weighted Damerau–Levenshtein ≤ 1.5 → suggest best match.
-     */
     suspend fun autocorrect(word: String): String? = withContext(Dispatchers.Default) {
         val lower = word.lowercase()
 
@@ -160,22 +164,17 @@ class PredictionEngine(
         commonTypos[lower]?.let { return@withContext it }
 
         // 2. Already valid
-        if (dictionary.alphabeticalWords.binarySearch(lower) >= 0) return@withContext null
-        if (personalWordDao.getFrequency(lower) > 0) return@withContext null
+        if (isKnownWord(lower)) return@withContext null
 
-        // 2.5 Adjacency-weighted Damerau–Levenshtein search
-        // Use a timeout to ensure we never block typing, and cap candidate count.
-        val candidate = kotlinx.coroutines.withTimeoutOrNull(80L) {
-            val threshold = if (lower.length <= 4) 0.9 else 1.5
-            dictionary.words
-                .asSequence()
-                .filter { kotlin.math.abs(it.length - lower.length) <= 2 }
-                .take(2500) // Much larger safety bound, safe now due to ThreadLocal DP cache
-                .map { it to damerauLev(lower, it) }
-                .filter { it.second <= threshold }
-                .minByOrNull { it.second }
-                ?.first
+        // 3. Trie-based Damerau-Levenshtein search
+        // More forgiving thresholds to fix fat-finger typos
+        val threshold = when {
+            lower.length <= 2 -> 0.9 // For 2 letters, allow max 1 adjacent typo (0.5)
+            lower.length <= 4 -> 1.5 // Allow 1 full mistake (1.0) or 3 adjacent typos
+            lower.length <= 6 -> 2.1 // Allow 2 full mistakes
+            else -> 2.6
         }
+        val candidate = trieSearch(lower, threshold)
 
         if (candidate != null) {
             val corrected = preserveCase(word, candidate)
@@ -183,15 +182,11 @@ class PredictionEngine(
             return@withContext corrected
         }
 
-        // 3. Missing space auto-split (e.g. "Theextra" -> "The extra")
-        // Only run if we didn't find a strong edit-distance autocorrect.
+        // 4. Missing space auto-split
         for (i in 1 until lower.length) {
             val left = lower.substring(0, i)
             val right = lower.substring(i)
             
-            // For auto-split, require words to be at least length 3 to prevent
-            // splitting valid typos into obscure 2-letter abbreviations (e.g. "samw" -> "sa mw").
-            // Specific 1/2-letter words are hardcoded as allowed exceptions.
             val validLeft = left.length > 2 || left in listOf("a", "i", "to", "do", "of", "in", "on", "is", "it", "he", "we", "my", "me", "be", "as", "at", "by", "go", "or", "so", "up", "us", "am", "an", "if", "no")
             val validRight = right.length > 2 || right in listOf("a", "i", "to", "do", "of", "in", "on", "is", "it", "he", "we", "my", "me", "be", "as", "at", "by", "go", "or", "so", "up", "us", "am", "an", "if", "no")
             
@@ -210,6 +205,82 @@ class PredictionEngine(
         }
 
         return@withContext null
+    }
+
+    private fun trieSearch(target: String, maxCost: Double): String? {
+        val targetLen = target.length
+        val currentRow = DoubleArray(targetLen + 1) { it.toDouble() }
+        
+        var bestMatch: String? = null
+        var bestCombinedScore = Double.MAX_VALUE
+
+        fun search(
+            node: TrieNode,
+            charAdded: Char,
+            wordSoFar: String,
+            prevRow: DoubleArray,
+            prevPrevRow: DoubleArray?,
+            prevChar: Char?
+        ) {
+            val nextRow = DoubleArray(targetLen + 1)
+            nextRow[0] = prevRow[0] + 1.0
+            
+            var minCostInRow = nextRow[0]
+
+            for (i in 1..targetLen) {
+                val targetChar = target[i - 1]
+                val subCost = if (targetChar == charAdded) {
+                    0.0
+                } else if (ADJACENT[targetChar]?.contains(charAdded) == true) {
+                    0.5
+                } else {
+                    1.0
+                }
+
+                var cost = minOf(
+                    prevRow[i] + 1.0,           // Deletion
+                    nextRow[i - 1] + 1.0,       // Insertion
+                    prevRow[i - 1] + subCost    // Substitution
+                )
+
+                // Transposition
+                if (i > 1 && prevPrevRow != null && prevChar != null) {
+                    if (targetChar == prevChar && target[i - 2] == charAdded) {
+                        cost = minOf(cost, prevPrevRow[i - 2] + 0.5)
+                    }
+                }
+                
+                nextRow[i] = cost
+                if (cost < minCostInRow) minCostInRow = cost
+            }
+
+            if (minCostInRow > maxCost) {
+                return // Prune this branch
+            }
+
+            if (node.isWord) {
+                val finalCost = nextRow[targetLen]
+                if (finalCost <= maxCost) {
+                    val lmProb = maxOf(node.probability, 0.000001)
+                    // Lower is better. Combine edit distance with language model probability.
+                    val combinedScore = finalCost - kotlin.math.ln(lmProb) * 0.15
+                    if (combinedScore < bestCombinedScore) {
+                        bestCombinedScore = combinedScore
+                        bestMatch = wordSoFar
+                    }
+                }
+            }
+
+            for ((childChar, childNode) in node.children) {
+                search(childNode, childChar, wordSoFar + childChar, nextRow, prevRow, charAdded)
+            }
+        }
+
+        for ((char, child) in dictionary.trie.root.children) {
+            search(child, char, char.toString(), currentRow, null, null)
+        }
+
+        return bestMatch
     }
 
     private fun preserveCase(original: String, correction: String): String {
@@ -232,7 +303,13 @@ class PredictionEngine(
 
     suspend fun isKnownWord(word: String): Boolean = withContext(Dispatchers.Default) {
         val lower = word.lowercase()
-        dictionary.alphabeticalWords.binarySearch(lower) >= 0 || personalWordDao.getFrequency(lower) > 0
+        // Fast Trie search
+        var current = dictionary.trie.root
+        for (char in lower) {
+            current = current.children[char] ?: return@withContext personalWordDao.getFrequency(lower) > 0
+        }
+        if (current.isWord) return@withContext true
+        return@withContext personalWordDao.getFrequency(lower) > 0
     }
 
     // ── Next-word prediction ──────────────────────────────────────────────────
@@ -255,76 +332,16 @@ class PredictionEngine(
         val pfx = prefix.lowercase()
         val chars = mutableSetOf<Char>()
         
-        val words = dictionary.alphabeticalWords
-        var idx = words.binarySearch(pfx)
-        if (idx < 0) idx = -idx - 1 // insertion point
-        
-        while (idx < words.size && chars.size < 26) {
-            val w = words[idx]
-            if (!w.startsWith(pfx)) break
-            if (w.length > pfx.length) {
-                chars.add(w[pfx.length])
-            }
-            idx++
+        var current = dictionary.trie.root
+        for (char in pfx) {
+            val child = current.children[char]
+            if (child == null) return@withContext emptySet()
+            current = child
         }
-            
+        
+        // Add all direct children characters
+        chars.addAll(current.children.keys)
         chars
-    }
-
-    // ── Adjacency-weighted Damerau–Levenshtein ────────────────────────────────
-    
-    // Thread-local array to avoid GC allocation during rapid typing
-    private val dpCache = object : ThreadLocal<DoubleArray>() {
-        override fun initialValue() = DoubleArray(400) // Support up to 19x19 words
-    }
-
-    /**
-     * Computes a weighted edit distance between [a] and [b]:
-     *  - Adjacent-key substitution: 0.5
-     *  - Transposition of adjacent chars: 0.5
-     *  - Insertion / deletion: 1.0
-     *  - Non-adjacent substitution: 1.0
-     *
-     * Uses the restricted Damerau distance (optimal string alignment, OSA).
-     */
-    private fun damerauLev(a: String, b: String): Double {
-        val m = a.length
-        val n = b.length
-        if ((m + 1) * (n + 1) > 400) return Double.MAX_VALUE // Safety bound
-
-        val dp = dpCache.get()!!
-        fun idx(i: Int, j: Int) = i * (n + 1) + j
-        
-        for (i in 0..m) dp[idx(i, 0)] = i.toDouble()
-        for (j in 0..n) dp[idx(0, j)] = j.toDouble()
-
-        for (i in 1..m) {
-            for (j in 1..n) {
-                val ai = a[i - 1]
-                val bj = b[j - 1]
-
-                val subCost = if (ai == bj) {
-                    0.0
-                } else if (ADJACENT[ai]?.contains(bj) == true) {
-                    0.5   // adjacent key — cheap
-                } else {
-                    1.0
-                }
-
-                var minCost = minOf(
-                    dp[idx(i - 1, j)] + 1.0,           // deletion
-                    dp[idx(i, j - 1)] + 1.0,           // insertion
-                    dp[idx(i - 1, j - 1)] + subCost    // substitution
-                )
-
-                // Transposition (Damerau extension)
-                if (i > 1 && j > 1 && ai == b[j - 2] && a[i - 2] == bj) {
-                    minCost = minOf(minCost, dp[idx(i - 2, j - 2)] + 0.5)
-                }
-                dp[idx(i, j)] = minCost
-            }
-        }
-        return dp[idx(m, n)]
     }
 
     // ── Bigram table (200 common English word pairs) ──────────────────────────
@@ -440,7 +457,7 @@ class PredictionEngine(
             "yeah"     to listOf("I", "that", "right"),
             "yes"      to listOf("I", "that", "please"),
             "no"       to listOf("one", "way", "problem"),
-            // Contractions (without apostrophe — as typed)
+            // Contractions
             "dont"     to listOf("know", "want", "think"),
             "cant"     to listOf("wait", "believe", "do"),
             "wont"     to listOf("be", "let", "do"),
@@ -479,7 +496,7 @@ class PredictionEngine(
             "mr"       to listOf("president", "smith", "jones"),
             "mrs"      to listOf("smith", "jones", "brown"),
             "dr"       to listOf("smith", "jones", "who"),
-            // ── Nigerian Pidgin / Nigerian teen phrases ──────────────────────
+            // Nigerian Pidgin / Teen phrases
             "abeg"       to listOf("no", "let", "comot"),
             "wahala"     to listOf("dey", "no", "be"),
             "omo"        to listOf("see", "this", "the"),

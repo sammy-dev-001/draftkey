@@ -12,8 +12,10 @@ interface KeyboardActionListener {
     /**
      * A key was tapped (finger down + up without meaningful movement).
      * @param primaryCode The key's [KeyModel.code].
+     * @param x The exact raw x coordinate of the tap (for spatial modeling)
+     * @param y The exact raw y coordinate of the tap (for spatial modeling)
      */
-    fun onKey(primaryCode: Int)
+    fun onKey(primaryCode: Int, x: Float = -1f, y: Float = -1f)
 
     /**
      * The long-press backspace threshold was reached — [KeyboardService]

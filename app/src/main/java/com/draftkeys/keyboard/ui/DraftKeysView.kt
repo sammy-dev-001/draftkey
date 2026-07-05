@@ -31,7 +31,8 @@ class DraftKeysView @JvmOverloads constructor(
 
     private var layoutType = KeyboardLayoutType.QWERTY
     private var isShifted  = false
-    private var keyboardLayout: KeyboardLayout? = null
+    var keyboardLayout: KeyboardLayout? = null
+        private set
 
     private var enterAction = EditorInfo.IME_ACTION_UNSPECIFIED
 
@@ -531,7 +532,7 @@ class DraftKeysView @JvmOverloads constructor(
                         
                         // Only trigger tap if we didn't trigger a special swipe mode
                         if (!ptr.isLongPressTriggered && !ptr.isWordDeleteTriggered) {
-                            listener?.onKey(ptr.currentKey!!.code)
+                            listener?.onKey(ptr.currentKey!!.code, ptr.startX, ptr.startY)
                         }
                     }
                     activePointers.remove(pointerId)

@@ -35,6 +35,8 @@ class WordDictionary(private val context: Context) {
 
     /** Pre-computed key sequences for every word. Key = word, Value = ordered list of key codes. */
     private val _keySequences = mutableMapOf<String, List<Int>>()
+    
+    val trie = com.draftkeys.keyboard.prediction.WordTrie()
 
     private var isLoaded = false
 
@@ -56,10 +58,14 @@ class WordDictionary(private val context: Context) {
     suspend fun load() = withContext(Dispatchers.IO) {
         if (isLoaded) return@withContext
         try {
+            var freqRank = 1.0
             context.assets.open(ASSET_FILE).bufferedReader().forEachLine { line ->
                 val word = line.trim().lowercase()
                 if (word.length >= 2 && word.all { it.isLetter() }) {
                     _words.add(word)
+                    // Zipf's law approximation: freq is inversely proportional to rank
+                    trie.insert(word, 1.0 / freqRank)
+                    freqRank += 1.0
                 }
             }
             _alphabeticalWords = _words.sorted()

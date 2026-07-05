@@ -375,7 +375,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         }
     }
 
-    override fun onKey(primaryCode: Int) {
+    override fun onKey(primaryCode: Int, x: Float, y: Float) {
         val ic = currentInputConnection ?: return
 
         // If a key other than backspace is pressed, reset the glide deletion state
