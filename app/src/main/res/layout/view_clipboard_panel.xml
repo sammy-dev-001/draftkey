@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    view_clipboard_panel.xml — Clipboard history panel
+
+    Slides in above the keyboard when the user taps the 📋 toolbar button.
+    Contains a horizontal RecyclerView of clip chips + empty-state hint.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#12122A"
+    android:paddingVertical="6dp">
+
+    <!-- Empty state hint -->
+    <TextView
+        android:id="@+id/tv_empty_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="No clipboard history yet"
+        android:textColor="#666688"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <!-- Horizontal clip chip list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_clips"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:orientation="horizontal"
+        android:scrollbars="none"
+        android:paddingHorizontal="8dp"
+        android:clipToPadding="false" />
+
+</FrameLayout>

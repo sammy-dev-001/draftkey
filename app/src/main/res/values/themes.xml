@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Base theme for the app.
+        Uses MaterialComponents DayNight so the setup activity looks clean.
+    -->
+    <style name="Theme.DraftKeys" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/accent_blue</item>
+        <item name="colorPrimaryVariant">@color/keyboard_background</item>
+        <item name="colorOnPrimary">@color/keyboard_background</item>
+        <item name="colorSecondary">@color/accent_blue</item>
+        <item name="colorOnSecondary">@color/keyboard_background</item>
+        <item name="android:windowBackground">@color/keyboard_background</item>
+        <item name="android:statusBarColor">@color/keyboard_background</item>
+        <item name="android:navigationBarColor">@color/keyboard_background</item>
+    </style>
+</resources>

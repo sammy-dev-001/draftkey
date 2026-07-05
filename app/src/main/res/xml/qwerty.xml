@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    qwerty.xml — Updated with permanent number row on top (Feature #1)
+    Now 5 rows total. keyHeight reduced to 50dp to keep overall height reasonable.
+-->
+<Keyboard
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:keyWidth="10%p"
+    android:keyHeight="50dp"
+    android:horizontalGap="2dp"
+    android:verticalGap="2dp">
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- NUMBER ROW — Always visible (like Samsung keyboard default)   -->
+    <!-- This row ALWAYS shows 1-0, so users never need to switch      -->
+    <!-- to the symbols layout just to type a number.                  -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <Row>
+        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" />
+        <Key android:codes="50" android:keyLabel="2" />
+        <Key android:codes="51" android:keyLabel="3" />
+        <Key android:codes="52" android:keyLabel="4" />
+        <Key android:codes="53" android:keyLabel="5" />
+        <Key android:codes="54" android:keyLabel="6" />
+        <Key android:codes="55" android:keyLabel="7" />
+        <Key android:codes="56" android:keyLabel="8" />
+        <Key android:codes="57" android:keyLabel="9" />
+        <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- ══════════════════════════════ -->
+    <!-- ROW 2 — Q W E R T Y U I O P  -->
+    <!-- ══════════════════════════════ -->
+    <Row>
+        <Key android:codes="113" android:keyLabel="q" android:keyEdgeFlags="left" />
+        <Key android:codes="119" android:keyLabel="w" />
+        <Key android:codes="101" android:keyLabel="e" />
+        <Key android:codes="114" android:keyLabel="r" />
+        <Key android:codes="116" android:keyLabel="t" />
+        <Key android:codes="121" android:keyLabel="y" />
+        <Key android:codes="117" android:keyLabel="u" />
+        <Key android:codes="105" android:keyLabel="i" />
+        <Key android:codes="111" android:keyLabel="o" />
+        <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- ══════════════════════════════ -->
+    <!-- ROW 3 — A S D F G H J K L    -->
+    <!-- ══════════════════════════════ -->
+    <Row>
+        <Key android:codes="97"  android:keyLabel="a" android:keyEdgeFlags="left"  android:keyWidth="11.1%p" />
+        <Key android:codes="115" android:keyLabel="s" android:keyWidth="11.1%p" />
+        <Key android:codes="100" android:keyLabel="d" android:keyWidth="11.1%p" />
+        <Key android:codes="102" android:keyLabel="f" android:keyWidth="11.1%p" />
+        <Key android:codes="103" android:keyLabel="g" android:keyWidth="11.1%p" />
+        <Key android:codes="104" android:keyLabel="h" android:keyWidth="11.1%p" />
+        <Key android:codes="106" android:keyLabel="j" android:keyWidth="11.1%p" />
+        <Key android:codes="107" android:keyLabel="k" android:keyWidth="11.1%p" />
+        <Key android:codes="108" android:keyLabel="l" android:keyWidth="11.2%p" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ROW 4 — ⇧ Z X C V B N M ⌫                                   -->
+    <!-- NOTE: isRepeatable removed from ⌫ — long-press is handled    -->
+    <!--        in KeyboardService with a Handler (word delete feature) -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <Row>
+        <Key
+            android:codes="-1"
+            android:keyLabel="⇧"
+            android:keyWidth="15%p"
+            android:keyEdgeFlags="left"
+            android:isModifier="true"
+            android:isSticky="true" />
+        <Key android:codes="122" android:keyLabel="z" android:keyWidth="10%p" />
+        <Key android:codes="120" android:keyLabel="x" android:keyWidth="10%p" />
+        <Key android:codes="99"  android:keyLabel="c" android:keyWidth="10%p" />
+        <Key android:codes="118" android:keyLabel="v" android:keyWidth="10%p" />
+        <Key android:codes="98"  android:keyLabel="b" android:keyWidth="10%p" />
+        <Key android:codes="110" android:keyLabel="n" android:keyWidth="10%p" />
+        <Key android:codes="109" android:keyLabel="m" android:keyWidth="10%p" />
+        <Key
+            android:codes="-5"
+            android:keyLabel="⌫"
+            android:keyWidth="15%p"
+            android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- ROW 5 — ?123 | , | SPACE | . | ↵                         -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <Row android:rowEdgeFlags="bottom">
+        <Key
+            android:codes="-2"
+            android:keyLabel="@string/label_123"
+            android:keyWidth="20%p"
+            android:keyEdgeFlags="left" />
+        <Key
+            android:codes="44"
+            android:keyLabel=","
+            android:keyWidth="10%p" />
+        <Key
+            android:codes="32"
+            android:keyLabel="SPACE"
+            android:keyWidth="40%p" />
+        <Key
+            android:codes="46"
+            android:keyLabel="."
+            android:keyWidth="10%p" />
+        <Key
+            android:codes="10"
+            android:keyLabel="↵"
+            android:keyWidth="20%p"
+            android:keyEdgeFlags="right" />
+    </Row>
+
+</Keyboard>

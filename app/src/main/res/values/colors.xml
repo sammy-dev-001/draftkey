@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── Background Colors ── -->
+    <color name="keyboard_background">#141415</color>    <!-- Near-black, matches DraftKeysView.COLOR_BACKGROUND -->
+    <color name="toolbar_background">#141415</color>     <!-- Same as keyboard so toolbar blends in -->
+
+    <!-- ── Key Colors ── -->
+    <color name="key_normal">#363638</color>             <!-- Regular key face -->
+    <color name="key_pressed">#4A4A4C</color>            <!-- Key when pressed -->
+
+    <!-- ── Text Colors ── -->
+    <color name="key_text">#E5E2E1</color>               <!-- Key label text -->
+    <color name="key_shadow">#000000</color>             <!-- Key shadow -->
+
+    <!-- ── Accent ── -->
+    <color name="accent_blue">#E5E2E1</color>            <!-- Matches key text (no more blue) -->
+
+    <!-- ── Status Colors ── -->
+    <color name="color_success">#66BB6A</color>
+    <color name="color_warning">#FF8C00</color>
+</resources>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    item_clip_entry.xml — A single clipboard chip in the horizontal RecyclerView.
+
+    Layout:
+    ┌──────────────────────────────────────────────┐
+    │  Preview text (up to 60 chars)               │
+    │  [Paste]  [🔒 Pin]  [✕ Delete]              │
+    └──────────────────────────────────────────────┘
+-->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="160dp"
+    android:layout_height="68dp"
+    android:orientation="vertical"
+    android:background="@drawable/clip_entry_background"
+    android:layout_marginEnd="8dp"
+    android:padding="8dp">
+
+    <!-- Clip text preview -->
+    <TextView
+        android:id="@+id/tv_clip_preview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:textColor="#E8E8F0"
+        android:textSize="11sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:lineSpacingExtra="1dp" />
+
+    <!-- Action buttons row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical">
+
+        <!-- Paste -->
+        <TextView
+            android:id="@+id/btn_clip_paste"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Paste"
+            android:textColor="#4FC3F7"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:padding="2dp" />
+
+        <!-- Pin -->
+        <TextView
+            android:id="@+id/btn_clip_pin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📌"
+            android:textSize="14sp"
+            android:padding="2dp"
+            android:layout_marginEnd="4dp" />
+
+        <!-- Delete -->
+        <TextView
+            android:id="@+id/btn_clip_delete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✕"
+            android:textColor="#888899"
+            android:textSize="12sp"
+            android:padding="2dp" />
+
+    </LinearLayout>
+</LinearLayout>

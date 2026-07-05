@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Needed for haptic feedback on keypresses -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.DraftKeys">
+
+        <!--
+            MainActivity: A simple setup screen shown when the user opens the app.
+            It explains how to enable the keyboard and shows current status.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:label="Keyboard Settings"
+            android:theme="@style/Theme.AppCompat.DayNight" />
+
+        <activity
+            android:name=".draft.DraftHistoryActivity"
+            android:label="Draft History"
+            android:theme="@style/Theme.AppCompat.DayNight" />
+
+        <!--
+            KeyboardService: This is the actual keyboard (IME).
+
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            → Ensures only Android's system can bind to this service (security)
+
+            The intent-filter "android.view.InputMethod" tells Android
+            that this service IS a keyboard input method.
+
+            meta-data points to method.xml which describes our keyboard's
+            languages and capabilities.
+        -->
+        <service
+            android:name=".KeyboardService"
+            android:exported="true"
+            android:label="@string/keyboard_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+    </application>
+
+</manifest>

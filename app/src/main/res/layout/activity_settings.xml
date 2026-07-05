@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    activity_settings.xml — Premium redesign of the DraftKeys settings screen.
+
+    Structure:
+      • Gradient hero header with title + subtitle
+      • Scrollable card sections: Theme picker (swatch grid) + Key Shape (pill toggle)
+      • Sticky "Done" button at bottom
+-->
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0D0D10">
+
+    <!-- ── Scrollable content ───────────────────────────────────── -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:paddingBottom="100dp"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- ── HERO HEADER ────────────────────────────────────── -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="156dp"
+                android:background="@drawable/settings_header_gradient">
+
+                <!-- Decorative blob -->
+                <View
+                    android:layout_width="220dp"
+                    android:layout_height="220dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="-60dp"
+                    android:layout_marginEnd="-60dp"
+                    android:background="@drawable/settings_accent_circle"
+                    android:alpha="0.15" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="bottom"
+                    android:padding="24dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⌨  DRAFTKEYS"
+                        android:textColor="#66FFFFFF"
+                        android:textSize="11sp"
+                        android:letterSpacing="0.18"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Keyboard Settings"
+                        android:textColor="#FFFFFF"
+                        android:textSize="26sp"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- ── THEME SECTION CARD ──────────────────────────────── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/settings_card_bg"
+                android:padding="20dp">
+
+                <!-- Header row: title + current theme label -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="4dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Keyboard Theme"
+                        android:textColor="#FFFFFF"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSelectedThemeName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#7B5FEF"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tap a swatch to preview and select"
+                    android:textColor="#55667788"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Swatch grid — rows added programmatically in 4-column chunks -->
+                <LinearLayout
+                    android:id="@+id/themeSwatchContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+            <!-- ── KEY SHAPE SECTION CARD ──────────────────────────── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/settings_card_bg"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Key Shape"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Controls the corner radius of every key"
+                    android:textColor="#55667788"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Three-way pill toggle -->
+                <LinearLayout
+                    android:id="@+id/shapeButtonRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:orientation="horizontal"
+                    android:background="@drawable/settings_pill_track"
+                    android:padding="4dp">
+
+                    <TextView
+                        android:id="@+id/shapeRounded"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Rounded"
+                        android:textColor="#CCCCDD"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:background="@drawable/settings_pill_inactive" />
+
+                    <TextView
+                        android:id="@+id/shapeSquare"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Square"
+                        android:textColor="#CCCCDD"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:background="@drawable/settings_pill_inactive"
+                        android:layout_marginHorizontal="4dp" />
+
+                    <TextView
+                        android:id="@+id/shapePill"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Pill"
+                        android:textColor="#CCCCDD"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:background="@drawable/settings_pill_inactive" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Bottom spacer -->
+            <View android:layout_width="match_parent" android:layout_height="16dp" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- ── DONE BUTTON ─────────────────────────────────────────── -->
+    <TextView
+        android:id="@+id/btnSaveSettings"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="28dp"
+        android:text="✓  Done"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:background="@drawable/settings_done_btn"
+        android:elevation="12dp" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

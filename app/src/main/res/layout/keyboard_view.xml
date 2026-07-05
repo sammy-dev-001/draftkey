@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    keyboard_view.xml — Updated for Phase 0 + 3 + 4 + Plasma Storm
+
+    Full layout stack (top → bottom z-order):
+    ┌───────────────────────────────────────────────────────┐
+    │  PlasmaBackgroundView (match_parent, behind all)       │
+    │  ┌───────────────────────────────────────────────┐  │
+    │  │  SCROLLABLE TOOLBAR (44dp)   [⟲ Restore] [📋] ...  │  │
+    │  ├───────────────────────────────────────────────┤  │
+    │  │  CLIPBOARD PANEL (72dp, hidden by default)           │  │
+    │  ├───────────────────────────────────────────────┤  │
+    │  │  SUGGESTION BAR (40dp)  word1 │ WORD2 │ word3        │  │
+    │  ├───────────────────────────────────────────────┤  │
+    │  │  DraftKeysView / EmojiKeyboardView (transparent bg)  │  │
+    │  └───────────────────────────────────────────────┘  │
+    └───────────────────────────────────────────────────────┘
+-->
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <!-- ── PLASMA BACKGROUND (hidden unless Plasma Storm theme active) ── -->
+    <com.draftkeys.keyboard.ui.PlasmaBackgroundView
+        android:id="@+id/plasma_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignTop="@+id/keyboard_content"
+        android:layout_alignBottom="@+id/keyboard_content"
+        android:visibility="gone" />
+
+    <!-- ── KEYBOARD CONTENT STACK ───────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/keyboard_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- ── SCROLLABLE TOOLBAR ──────────────────────────────────── -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:scrollbars="none"
+        android:fadeScrollbars="true">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btn_restore"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="⟲ Restore"
+                android:textColor="@color/key_text"
+                android:textSize="12sp"
+                android:letterSpacing="0.01"
+                android:background="@drawable/toolbar_btn_background"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="6dp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/btn_clipboard"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="Paste"
+                android:textColor="@color/key_text"
+                android:textSize="12sp"
+                android:background="@drawable/toolbar_btn_background"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="6dp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/btn_select_all"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="Select All"
+                android:textColor="@color/key_text"
+                android:textSize="12sp"
+                android:background="@drawable/toolbar_btn_background"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="6dp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/btn_copy"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="Copy"
+                android:textColor="@color/key_text"
+                android:textSize="12sp"
+                android:background="@drawable/toolbar_btn_background"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="6dp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/btn_cut"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="Cut"
+                android:textColor="@color/key_text"
+                android:textSize="12sp"
+                android:background="@drawable/toolbar_btn_background"
+                android:paddingHorizontal="12dp"
+                android:stateListAnimator="@null" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- ── CLIPBOARD PANEL ─────────── -->
+    <com.draftkeys.keyboard.clipboard.ClipboardPanel
+        android:id="@+id/clipboard_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <!-- ── SUGGESTION BAR ─────────────────────────── -->
+    <com.draftkeys.keyboard.ui.SuggestionBarView
+        android:id="@+id/suggestion_bar"
+        android:layout_width="match_parent"
+        android:layout_height="40dp" />
+
+    <!-- ── KEYBOARD CANVAS (DraftKeysView / EmojiKeyboardView swap) -->
+    <!-- FrameLayout so both views occupy the same space and one can be GONE -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.draftkeys.keyboard.ui.DraftKeysView
+            android:id="@+id/draft_keys_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <com.draftkeys.keyboard.ui.EmojiKeyboardView
+            android:id="@+id/emoji_keyboard_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

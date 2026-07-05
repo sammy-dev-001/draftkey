@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- REFRESH_CHECK_1: If you see this, the file is synced! -->
+<!--
+    method.xml tells Android about this keyboard's capabilities.
+
+    supportsSwitchingToNextInputMethod="true"
+    → Allows users to swipe/hold the globe key to switch between keyboards
+
+    The <subtype> defines a language + layout pair.
+    You can add multiple subtypes for multiple languages later.
+-->
+<input-method
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsSwitchingToNextInputMethod="true">
+
+    <subtype
+        android:label="English (US)"
+        android:languageTag="en-US"
+        android:imeSubtypeMode="keyboard" />
+
+</input-method>
