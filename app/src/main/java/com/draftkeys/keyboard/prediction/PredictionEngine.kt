@@ -109,39 +109,13 @@ class PredictionEngine(
             .sortedByDescending { it.frequency }
             .map { it.word }
 
-        // Fast prefix search using Trie
-        val dictMatches = mutableListOf<String>()
-        var current = dictionary.trie.root
-        var foundPrefix = true
-        for (char in pfx) {
-            val child = current.children[char]
-            if (child == null) {
-                foundPrefix = false
-                break
-            }
-            current = child
-        }
-        
-        if (foundPrefix) {
-            fun collectWords(node: TrieNode, wordSoFar: String) {
-                if (dictMatches.size >= maxResults * 5) return
-                if (node.isWord) dictMatches.add(wordSoFar)
-                for ((char, child) in node.children) {
-                    collectWords(child, wordSoFar + char)
-                }
-            }
-            collectWords(current, pfx)
-        }
-        
-        // Sort dictMatches by language model probability
-        val sortedDictMatches = dictMatches
-            .filter { it !in personal }
-            .sortedByDescending { word ->
-                // fetch probability by traversing again (fast enough)
-                var n = dictionary.trie.root
-                for (c in word) n = n.children[c]!!
-                n.probability
-            }
+        // Fast prefix search using pre-sorted dictionary words (sorted by frequency)
+        val dictMatches = dictionary.words.asSequence()
+            .filter { it.startsWith(pfx) }
+            .take(maxResults * 5)
+            .toList()
+
+        val sortedDictMatches = dictMatches.filter { it !in personal }
 
         val exactTypo = commonTypos[pfx]
         val typoMatch = if (exactTypo != null) listOf(preserveCase(prefix, exactTypo)) else emptyList()
