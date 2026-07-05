@@ -26,7 +26,7 @@ class PredictionEngine(
     private val commonTypos = mapOf(
         "teh"  to "the",    "adn"  to "and",    "taht"  to "that",   "ahve" to "have",
         "hte"  to "the",    "nad"  to "and",    "yuo"   to "you",    "abotu" to "about",
-        "fo"   to "of",     "thsi" to "this",
+        "fo"   to "of",     "thsi" to "this",     "tje" to "the",
         "dont" to "don't",  "cant" to "can't",  "wont"  to "won't",
         "im"   to "I'm",    "ive"  to "I've",
         "thats" to "that's", "whats" to "what's", "hes" to "he's", "shes" to "she's",
