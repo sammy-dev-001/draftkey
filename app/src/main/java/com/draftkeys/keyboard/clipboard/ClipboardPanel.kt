@@ -33,18 +33,23 @@ class ClipboardPanel @JvmOverloads constructor(
     var onPaste:  (ClipEntry) -> Unit = {}
     var onPin:    (ClipEntry) -> Unit = {}
     var onDelete: (ClipEntry) -> Unit = {}
+    var onClose:  () -> Unit = {}
 
     private val recyclerView: RecyclerView
     private val emptyHint: TextView
+    private val btnClose: View
     private val adapter = ClipAdapter()
 
     init {
         LayoutInflater.from(context).inflate(R.layout.view_clipboard_panel, this, true)
         recyclerView = findViewById(R.id.rv_clips)
         emptyHint    = findViewById(R.id.tv_empty_hint)
+        btnClose     = findViewById(R.id.btn_clipboard_close)
 
-        recyclerView.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+        recyclerView.layoutManager = androidx.recyclerview.widget.GridLayoutManager(context, 3)
         recyclerView.adapter       = adapter
+        
+        btnClose.setOnClickListener { onClose() }
     }
 
     fun setClips(clips: List<ClipEntry>) {
@@ -78,14 +83,19 @@ class ClipboardPanel @JvmOverloads constructor(
 
         inner class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val tvPreview: TextView   = itemView.findViewById(R.id.tv_clip_preview)
-            private val btnPaste:  View       = itemView.findViewById(R.id.btn_clip_paste)
+            private val ivPreview: android.widget.ImageView = itemView.findViewById(R.id.iv_clip_preview)
             private val btnPin:    View       = itemView.findViewById(R.id.btn_clip_pin)
             private val btnDelete: View       = itemView.findViewById(R.id.btn_clip_delete)
 
             fun bind(entry: ClipEntry) {
-                // Show up to 60 chars preview
-                tvPreview.text = entry.text.take(60).let {
-                    if (entry.text.length > 60) "$it…" else it
+                if (entry.isImage) {
+                    tvPreview.visibility = View.GONE
+                    ivPreview.visibility = View.VISIBLE
+                    ivPreview.setImageURI(android.net.Uri.parse(entry.text))
+                } else {
+                    ivPreview.visibility = View.GONE
+                    tvPreview.visibility = View.VISIBLE
+                    tvPreview.text = entry.text
                 }
 
                 // Pin icon state
@@ -93,7 +103,6 @@ class ClipboardPanel @JvmOverloads constructor(
 
                 // Tapping anywhere on the chip pastes it
                 itemView.setOnClickListener { onPaste(entry) }
-                btnPaste.setOnClickListener  { onPaste(entry) }
                 btnPin.setOnClickListener    { onPin(entry)   }
                 btnDelete.setOnClickListener { onDelete(entry); removeAt(bindingAdapterPosition) }
             }

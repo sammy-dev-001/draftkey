@@ -7,5 +7,7 @@ enum class KeyboardLayoutType {
     /** Symbols / punctuation layout with 4 rows. */
     SYMBOLS,
     /** Emoji layout. */
-    EMOJI
+    EMOJI,
+    /** Numeric keypad with 4 rows for numbers and basic symbols. */
+    NUMPAD
 }

@@ -65,6 +65,31 @@ class PredictionEngine(
         "weve"       to "we've"
     )
 
+    // ── Emoji Suggestions ─────────────────────────────────────────────────────
+    private val emojiMap = mapOf(
+        "pizza" to "🍕", "food" to "🍔", "coffee" to "☕", "beer" to "🍺", "wine" to "🍷",
+        "dog" to "🐶", "cat" to "🐱", "love" to "❤️", "fire" to "🔥", "cool" to "😎",
+        "laugh" to "😂", "lol" to "😂", "lmao" to "🤣", "sad" to "😢", "cry" to "😭",
+        "poop" to "💩", "heart" to "❤️", "smile" to "😊", "happy" to "😊", "angry" to "😡",
+        "thumbs" to "👍", "ok" to "👌", "yes" to "👍", "no" to "👎", "check" to "✅",
+        "cross" to "❌", "star" to "⭐", "sun" to "☀️", "moon" to "🌙", "world" to "🌍",
+        "music" to "🎵", "party" to "🎉", "gift" to "🎁", "cake" to "🎂", "car" to "🚗",
+        "house" to "🏠", "money" to "💰", "cash" to "💵", "sleep" to "😴", "tired" to "🥱",
+        "sick" to "🤒", "wow" to "😮", "omg" to "😱", "please" to "🙏", "pray" to "🙏",
+        "hot" to "🔥", "cold" to "🥶", "gym" to "💪", "strong" to "💪", "brain" to "🧠",
+        "eyes" to "👀", "look" to "👀", "kiss" to "😘", "kisses" to "💋", "hug" to "🤗", "ghost" to "👻",
+        "alien" to "👽", "robot" to "🤖", "clown" to "🤡", "monkey" to "🐒", "bear" to "🐻",
+        "bird" to "🐦", "fish" to "🐟", "tree" to "🌳", "flower" to "🌸", "water" to "💧",
+        "rain" to "🌧️", "snow" to "❄️", "storm" to "⚡", "book" to "📖", "study" to "📚",
+        "work" to "💼", "phone" to "📱", "computer" to "💻", "game" to "🎮", "tv" to "📺",
+        "camera" to "📷", "movie" to "🍿", "sports" to "⚽", "basketball" to "🏀", "football" to "🏈",
+        "run" to "🏃", "walk" to "🚶", "stop" to "🛑", "warning" to "⚠️", "idea" to "💡",
+        "time" to "⏰", "clock" to "⏱️", "calendar" to "📅", "mail" to "📧", "letter" to "✉️",
+        "package" to "📦", "key" to "🔑", "lock" to "🔒", "unlock" to "🔓", "search" to "🔍",
+        "good" to "👍", "bad" to "👎", "great" to "🌟", "perfect" to "💯", "100" to "💯",
+        "confused" to "😕", "morning" to "🌅", "mad" to "😡", "glad" to "😊"
+    )
+
     // ── QWERTY keyboard adjacency map ─────────────────────────────────────────
     private val ADJACENT: Map<Char, Set<Char>> = mapOf(
         'q' to setOf('w', 'a', 's'),
@@ -120,7 +145,19 @@ class PredictionEngine(
         val exactTypo = commonTypos[pfx]
         val typoMatch = if (exactTypo != null) listOf(preserveCase(prefix, exactTypo)) else emptyList()
 
-        (typoMatch + personal + sortedDictMatches).distinct().take(maxResults)
+        // Emoji prediction for the exact word
+        val emojiMatch = emojiMap[pfx]?.let { listOf(it) } ?: emptyList()
+
+        // Live Fuzzy Search (Autocorrect while typing)
+        var fuzzyMatch: List<String> = emptyList()
+        if (pfx.length >= 3 && sortedDictMatches.isEmpty() && exactTypo == null) {
+            val candidate = autocorrect(prefix)
+            if (candidate != null && candidate.lowercase() != pfx) {
+                fuzzyMatch = listOf(candidate)
+            }
+        }
+
+        (typoMatch + fuzzyMatch + personal + sortedDictMatches + emojiMatch).distinct().take(maxResults)
     }
 
     // ── Autocorrect ───────────────────────────────────────────────────────────

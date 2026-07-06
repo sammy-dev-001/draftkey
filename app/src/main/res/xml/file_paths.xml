@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Expose files in context.filesDir/clips/ to other apps -->
+    <files-path name="clips" path="clips/" />
+</paths>

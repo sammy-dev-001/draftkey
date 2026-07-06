@@ -137,6 +137,7 @@ class KeyboardLayout private constructor(
                 KeyboardLayoutType.QWERTY -> qwertyRows()
                 KeyboardLayoutType.SYMBOLS -> symbolsRows()
                 KeyboardLayoutType.EMOJI -> emojiRows()
+                KeyboardLayoutType.NUMPAD -> numpadRows()
             }
             val keys    = mutableListOf<KeyModel>()
             var currentY = topPad
@@ -204,13 +205,14 @@ class KeyboardLayout private constructor(
                 key('m'.code, "m", secondaryLabel = "?"),
                 mod(CODE_BACKSPACE,"⌫",    0.15f)
             ),
-            // ── Row 4: Bottom row ───────────────────────────────────
+            // ── Row 4: Bottom row ──────────────────────────────────────────────────
             row(
-                mod(CODE_MODE_CHANGE,"?123", 0.20f),
-                mod(-10,        "😃",           0.10f), // Emoji placeholder code
-                mod(32,        "SPACE",        0.40f),
-                key('.'.code,  ".",            0.10f, secondaryLabel = ","),
-                mod(10,        "↵",           0.20f)
+                mod(CODE_MODE_CHANGE,"?123", 0.15f),
+                key(','.code,   ",",         0.10f),
+                mod(-10,        "😃",        0.10f), // Emoji
+                mod(32,         "SPACE",     0.35f),
+                key('.'.code,   ".",         0.10f),
+                mod(10,         "↵",         0.20f)
             )
         )
 

@@ -103,8 +103,11 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
     private lateinit var repository:        DraftRepository
     private lateinit var dictionary:        WordDictionary
     private lateinit var gestureDecoder:    GestureDecoder
+    private lateinit var staticBigrams:     com.draftkeys.keyboard.prediction.StaticBigrams
     private lateinit var predictionEngine:  PredictionEngine
     private lateinit var clipboardManager:  ClipboardHistoryManager
+
+    private var lastCommittedWord: String? = null
 
     // ── System services ─────────────────────────────────────────────
     private lateinit var vibrator: Vibrator
@@ -126,7 +129,8 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         clipboardManager = ClipboardHistoryManager(this, db.clipDao(), serviceScope)
         // Initialise dictionary first so both PredictionEngine and GestureDecoder share it
         dictionary       = WordDictionary(this)
-        predictionEngine = PredictionEngine(dictionary, db.personalWordDao())
+        staticBigrams    = com.draftkeys.keyboard.prediction.StaticBigrams(this)
+        predictionEngine = PredictionEngine(dictionary, db.personalWordDao(), db.bigramDao(), staticBigrams)
         gestureDecoder   = GestureDecoder(dictionary)
 
         // ── Load dictionary & emojis on background thread ────────
@@ -137,6 +141,19 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 if (this@KeyboardService::emojiKeyboardView.isInitialized) {
                     emojiKeyboardView.setEmojis(emojiList)
                 }
+            }
+            
+            // Start background loads
+            val dictJob = launch { dictionary.load() }
+            val indexJob = launch { 
+                dictJob.join()
+                dictionary.buildIndex() 
+            }
+            val bigramJob = launch { staticBigrams.load() }
+            
+            indexJob.join()
+            bigramJob.join()
+        }
             }
             dictionary.load()
             // Build the gesture index after a layout is available;
@@ -204,12 +221,42 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
 
         // ── Clipboard panel callbacks ───────────────────────────
         clipboardPanel.onPaste = { entry ->
-            // Suppress the echo clipboard event our own paste will generate
-            clipboardManager.setLastPasted(entry.text)
-            currentInputConnection?.commitText(entry.text, entry.text.length)
-            clipboardPanel.hide()
-            toast(getString(R.string.clip_pasted))
-            scheduleSave()
+            if (entry.isImage) {
+                val file = java.io.File(entry.text)
+                if (file.exists() && currentInputConnection != null && currentInputEditorInfo != null) {
+                    try {
+                        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                        val clipDescription = android.content.ClipDescription("Image", arrayOf("image/png", "image/jpeg", "image/gif", "image/*"))
+                        val contentInfo = androidx.core.view.inputmethod.InputContentInfoCompat(uri, clipDescription, null)
+                        val flags = androidx.core.view.inputmethod.InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
+                        val success = androidx.core.view.inputmethod.InputConnectionCompat.commitContent(
+                            currentInputConnection,
+                            currentInputEditorInfo,
+                            contentInfo,
+                            flags,
+                            null
+                        )
+                        if (success) {
+                            hideClipboardPanel()
+                            toast("Image pasted")
+                        } else {
+                            toast("App doesn't support pasting images here")
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        toast("Failed to paste image")
+                    }
+                } else {
+                    toast("Image file missing or editor invalid")
+                }
+            } else {
+                // Suppress the echo clipboard event our own paste will generate
+                clipboardManager.setLastPasted(entry.text)
+                currentInputConnection?.commitText(entry.text, 1)
+                hideClipboardPanel()
+                toast(getString(R.string.clip_pasted))
+                scheduleSave()
+            }
         }
         clipboardPanel.onPin = { entry ->
             serviceScope.launch { clipboardManager.togglePin(entry.id) }
@@ -219,6 +266,9 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         }
         clipboardPanel.onDelete = { entry ->
             serviceScope.launch { clipboardManager.deleteClip(entry.id) }
+        }
+        clipboardPanel.onClose = {
+            hideClipboardPanel()
         }
 
         return view
@@ -260,8 +310,16 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
             }
         }
         
-        draftKeysView.switchToQwerty()
-        checkAutoCapitalize()
+        val variation = info.inputType and InputType.TYPE_MASK_CLASS
+        if (variation == InputType.TYPE_CLASS_NUMBER || 
+            variation == InputType.TYPE_CLASS_PHONE || 
+            variation == InputType.TYPE_CLASS_DATETIME) {
+            draftKeysView.switchToNumpad()
+            suggestionBar.clearSuggestions()
+        } else {
+            draftKeysView.switchToQwerty()
+            checkAutoCapitalize()
+        }
         
         // Pass Enter action to the view
         val noEnterAction = (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
@@ -408,7 +466,6 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     justAutoSpaced = false
                 }
 
-                if (currentWord.isNotEmpty()) currentWord.deleteCharAt(currentWord.length - 1)
                 if (typedBuffer.isNotEmpty()) typedBuffer.deleteCharAt(typedBuffer.length - 1)
                 
                 val selectedText = ic.getSelectedText(0)
@@ -418,7 +475,26 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     ic.deleteSurroundingText(1, 0)
                 }
                 
-                updateSuggestions()
+                // Sync currentWord with the OS buffer directly
+                val beforeCursor = ic.getTextBeforeCursor(50, 0)?.toString() ?: ""
+                val afterCursor = ic.getTextAfterCursor(50, 0)?.toString() ?: ""
+                
+                var startIdx = beforeCursor.length
+                while (startIdx > 0 && beforeCursor[startIdx - 1].isLetter()) {
+                    startIdx--
+                }
+                
+                var endIdx = 0
+                while (endIdx < afterCursor.length && afterCursor[endIdx].isLetter()) {
+                    endIdx++
+                }
+                
+                currentWord.clear()
+                currentWord.append(beforeCursor.substring(startIdx))
+                currentWordSuffixLength = endIdx
+                
+                lastCommittedWord = null
+                if (!isSensitiveField) updateSuggestions()
                 scheduleSave()
                 checkAutoCapitalize()
             }
@@ -469,7 +545,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     // Double-space → ". " + capitalize
                     autocorrectJob?.cancel()
                     ic.deleteSurroundingText(1, 0)
-                    ic.commitText(". ", 2)
+                    ic.commitText(". ", 1)
                     if (typedBuffer.isNotEmpty()) { typedBuffer.deleteCharAt(typedBuffer.length - 1); typedBuffer.append(". ") }
                     activateShift()
                 } else {
@@ -490,7 +566,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                                         // delete+commit will fire so the cursor stays in place.
                                         suppressNextSelectionUpdate = true
                                         ic2.deleteSurroundingText(wordToCheck.length, 0)
-                                        ic2.commitText("$correction ", correction.length + 1)
+                                        ic2.commitText("$correction ", 1)
                                         // Update typed buffer with corrected word
                                         val excess = wordToCheck.length
                                         if (typedBuffer.length >= excess) typedBuffer.delete(typedBuffer.length - excess, typedBuffer.length)
@@ -510,8 +586,14 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                             // Learn the original typed word, not the correction
                             predictionEngine.learn(wordToCheck)
                             
+                            val finalWord = correction ?: wordToCheck
+                            predictionEngine.learnBigram(lastCommittedWord, finalWord)
+                            lastCommittedWord = finalWord
+                            
                             // Trigger next word suggestions after processing the space
-                            updateNextWordSuggestions(correction ?: wordToCheck)
+                            if (!isSensitiveField) {
+                                updateNextWordSuggestions(correction ?: wordToCheck)
+                            }
                         }
                     } else {
                         ic.commitText(" ", 1)
@@ -560,33 +642,52 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     // Smart Punctuation
                     val prevChar = ic.getTextBeforeCursor(1, 0)?.toString()?.firstOrNull()
                     when (ch) {
-                        '(' -> { ic.commitText("()", 2); moveCursor(-1) }
-                        '[' -> { ic.commitText("[]", 2); moveCursor(-1) }
-                        '{' -> { ic.commitText("{}", 2); moveCursor(-1) }
+                        '(' -> { ic.commitText("()", 1); moveCursor(-1) }
+                        '[' -> { ic.commitText("[]", 1); moveCursor(-1) }
+                        '{' -> { ic.commitText("{}", 1); moveCursor(-1) }
                         '"' -> { 
                             if (prevChar == null || prevChar.isWhitespace()) {
-                                ic.commitText("\"\"", 2); moveCursor(-1)
+                                ic.commitText("\"\"", 1); moveCursor(-1)
                             } else ic.commitText("\"", 1)
                         }
                         else -> {
                             // Smart Auto-Spacing logic for punctuation
                             if (justAutoSpaced && (ch == ',' || ch == '.' || ch == '?' || ch == '!' || ch == ':')) {
                                 ic.deleteSurroundingText(1, 0)
-                                ic.commitText(ch.toString() + " ", 2)
+                                ic.commitText(ch.toString() + " ", 1)
                                 if (typedBuffer.isNotEmpty()) {
                                     typedBuffer.deleteCharAt(typedBuffer.length - 1)
                                 }
                                 typedBuffer.append(ch).append(' ')
+                                if (ch == '.' || ch == '!' || ch == '?') lastCommittedWord = null
                             } else {
                                 justAutoSpaced = false
                                 ic.commitText(ch.toString(), 1)
                                 typedBuffer.append(ch)
                             }
                             if (ch.isLetter()) {
-                                currentWord.append(ch.lowercaseChar())
+                                // Sync currentWord with the OS buffer directly to avoid races with onUpdateSelection
+                                val beforeCursor = ic.getTextBeforeCursor(50, 0)?.toString() ?: ""
+                                val afterCursor = ic.getTextAfterCursor(50, 0)?.toString() ?: ""
+                                
+                                var startIdx = beforeCursor.length
+                                while (startIdx > 0 && beforeCursor[startIdx - 1].isLetter()) {
+                                    startIdx--
+                                }
+                                
+                                var endIdx = 0
+                                while (endIdx < afterCursor.length && afterCursor[endIdx].isLetter()) {
+                                    endIdx++
+                                }
+                                
+                                currentWord.clear()
+                                currentWord.append(beforeCursor.substring(startIdx))
+                                currentWordSuffixLength = endIdx
+                                
                                 if (!isSensitiveField) updateSuggestions()
                             } else {
                                 currentWord.clear()
+                                currentWordSuffixLength = 0
                                 suggestionBar.clearSuggestions()
                             }
                         }
@@ -633,6 +734,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         currentWord.clear()
         currentWordSuffixLength = 0
         justAutoSpaced = false
+        lastCommittedWord = null
         scheduleSave()
     }
 
@@ -647,6 +749,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         currentWord.clear()
         currentWordSuffixLength = 0
         justAutoSpaced = false
+        lastCommittedWord = null
         scheduleSave()
     }
 
@@ -668,7 +771,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 withContext(Dispatchers.Main) {
                     if (results.isNotEmpty()) {
                         val top = results.first()
-                        currentInputConnection?.commitText("$top ", top.length + 1)
+                        currentInputConnection?.commitText("$top ", 1)
                         currentWord.clear()
                         currentWordSuffixLength = 0
                         
@@ -678,7 +781,11 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                         if (results.size > 1) suggestionBar.setSuggestions(results)
                         else suggestionBar.clearSuggestions()
                         // Learn the committed word
-                        serviceScope.launch { predictionEngine.learn(top) }
+                        serviceScope.launch { 
+                            predictionEngine.learn(top)
+                            predictionEngine.learnBigram(lastCommittedWord, top)
+                            lastCommittedWord = top
+                        }
                         checkAutoCapitalize()
                         scheduleSave()
                     }
@@ -717,13 +824,17 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
             val excess = currentWord.length
             if (typedBuffer.length >= excess) typedBuffer.delete(typedBuffer.length - excess, typedBuffer.length)
         }
-        ic.commitText("$cleanWord ", cleanWord.length + 1)
+        ic.commitText("$cleanWord ", 1)
         typedBuffer.append("$cleanWord ")
         currentWord.clear()
         currentWordSuffixLength = 0
         justAutoSpaced = true
         suggestionBar.clearSuggestions()
-        serviceScope.launch { predictionEngine.learn(cleanWord) }
+        serviceScope.launch { 
+            predictionEngine.learn(cleanWord)
+            predictionEngine.learnBigram(lastCommittedWord, cleanWord)
+            lastCommittedWord = cleanWord
+        }
         checkAutoCapitalize()
         scheduleSave()
         
@@ -735,7 +846,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
     override fun onAutocorrectUndoTapped(originalWord: String) {
         val ic = currentInputConnection ?: return
         deleteWordBeforeCursor() // Safely removes the corrected word + trailing space
-        ic.commitText("$originalWord ", originalWord.length + 1)
+        ic.commitText("$originalWord ", 1)
         
         // Fix the typed buffer
         val trimmed = typedBuffer.trimEnd()
@@ -808,13 +919,15 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
 
     private fun toggleClipboardPanel() {
         if (clipboardPanel.isOpen) {
-            clipboardPanel.hide()
+            hideClipboardPanel()
         } else {
             serviceScope.launch {
                 try {
                     val clips = clipboardManager.getRecentClips()
                     withContext(Dispatchers.Main) {
                         clipboardPanel.setClips(clips)
+                        draftKeysView.visibility = View.GONE
+                        emojiKeyboardView.visibility = View.GONE
                         clipboardPanel.show()
                     }
                 } catch (e: Exception) {
@@ -824,6 +937,11 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 }
             }
         }
+    }
+    
+    private fun hideClipboardPanel() {
+        clipboardPanel.hide()
+        draftKeysView.visibility = View.VISIBLE
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -928,7 +1046,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 val ic = currentInputConnection ?: return@withContext
                 if (draft != null) {
                     ic.performContextMenuAction(android.R.id.selectAll)
-                    ic.commitText(draft.textContent, draft.textContent.length)
+                    ic.commitText(draft.textContent, 1)
                     toast(getString(R.string.draft_restored))
                 } else {
                     toast(getString(R.string.no_draft_found))
@@ -976,11 +1094,12 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                         systemClip
                     } ?: return@withContext
                 clipboardManager.setLastPasted(textToPaste)
-                ic.commitText(textToPaste, textToPaste.length)
+                ic.commitText(textToPaste, 1)
                 typedBuffer.append(textToPaste)
                 currentWord.clear()
                 currentWordSuffixLength = 0
                 suggestionBar.clearSuggestions()
+                hideClipboardPanel()
                 scheduleSave()
             }
         }

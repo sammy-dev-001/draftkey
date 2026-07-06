@@ -20,7 +20,8 @@ data class ClipEntry(
     val id: Int = 0,
     val text: String,
     val timestamp: Long,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val isImage: Boolean = false
 ) {
     companion object {
         /** Maximum number of non-pinned entries kept in history. */

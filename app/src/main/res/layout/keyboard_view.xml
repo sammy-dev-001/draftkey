@@ -115,13 +115,6 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- ── CLIPBOARD PANEL ─────────── -->
-    <com.draftkeys.keyboard.clipboard.ClipboardPanel
-        android:id="@+id/clipboard_panel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:visibility="gone" />
-
     <!-- ── SUGGESTION BAR ─────────────────────────── -->
     <com.draftkeys.keyboard.ui.SuggestionBarView
         android:id="@+id/suggestion_bar"
@@ -141,6 +134,13 @@
 
         <com.draftkeys.keyboard.ui.EmojiKeyboardView
             android:id="@+id/emoji_keyboard_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+
+        <!-- ── CLIPBOARD PANEL ─────────── -->
+        <com.draftkeys.keyboard.clipboard.ClipboardPanel
+            android:id="@+id/clipboard_panel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone" />

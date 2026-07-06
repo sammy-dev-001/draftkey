@@ -46,6 +46,23 @@ interface ClipDao {
     @Query("DELETE FROM clipboard_history WHERE id = :id")
     suspend fun delete(id: Int)
 
+    /** Get a single clip by ID (useful for file cleanup before deletion). */
+    @Query("SELECT * FROM clipboard_history WHERE id = :id")
+    suspend fun getById(id: Int): ClipEntry?
+
+    /** Get entries that are about to be pruned, so we can delete their files. */
+    @Query("""
+        SELECT * FROM clipboard_history
+        WHERE isPinned = 0
+          AND id NOT IN (
+              SELECT id FROM clipboard_history
+              WHERE isPinned = 0
+              ORDER BY timestamp DESC
+              LIMIT ${ClipEntry.MAX_ENTRIES}
+          )
+    """)
+    suspend fun getOldEntriesToPrune(): List<ClipEntry>
+
     /**
      * Prune the oldest non-pinned entries so we never exceed [ClipEntry.MAX_ENTRIES].
      * Keeps the newest [ClipEntry.MAX_ENTRIES] non-pinned rows, deletes the rest.
@@ -65,6 +82,14 @@ interface ClipDao {
     /** Clear all non-pinned clips. */
     @Query("DELETE FROM clipboard_history WHERE isPinned = 0")
     suspend fun clearUnpinned()
+
+    /** Get all unpinned clips. */
+    @Query("SELECT * FROM clipboard_history WHERE isPinned = 0")
+    suspend fun getAllUnpinned(): List<ClipEntry>
+
+    /** Get all clips. */
+    @Query("SELECT * FROM clipboard_history")
+    suspend fun getAll(): List<ClipEntry>
 
     /** Clear all clips including pinned. */
     @Query("DELETE FROM clipboard_history")

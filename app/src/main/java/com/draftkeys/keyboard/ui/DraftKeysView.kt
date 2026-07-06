@@ -169,7 +169,7 @@ class DraftKeysView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         isAnimating = false
-        frameHandler.removeCallbacks(frameRunnable)
+        frameHandler.removeCallbacksAndMessages(null)
     }
 
     fun applyTheme() {
@@ -224,6 +224,11 @@ class DraftKeysView @JvmOverloads constructor(
 
     fun switchToEmoji() {
         layoutType = KeyboardLayoutType.EMOJI
+        requestLayout(); rebuildLayout()
+    }
+    
+    fun switchToNumpad() {
+        layoutType = KeyboardLayoutType.NUMPAD
         requestLayout(); rebuildLayout()
     }
 

@@ -3,9 +3,12 @@ package com.draftkeys.keyboard.clipboard
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * ClipboardHistoryManager — listens for clipboard changes and persists them to Room.
@@ -40,8 +43,15 @@ class ClipboardHistoryManager(
     private val listener = ClipboardManager.OnPrimaryClipChangedListener {
         val clip = systemClipboard.primaryClip ?: return@OnPrimaryClipChangedListener
 
-        // Skip image/screenshot clips (e.g. screenshots put image/png on the clipboard)
-        if (isImageClip(clip)) return@OnPrimaryClipChangedListener
+        if (isImageClip(clip)) {
+            val item = clip.getItemAt(0)
+            val uri = item.uri ?: run {
+                val text = item.text?.toString() ?: item.coerceToText(context)?.toString()
+                if (text != null && text.startsWith("content://")) Uri.parse(text) else null
+            }
+            if (uri != null) saveImageIfNew(uri)
+            return@OnPrimaryClipChangedListener
+        }
 
         val text = clip.getItemAt(0)
             ?.coerceToText(context)
@@ -49,8 +59,11 @@ class ClipboardHistoryManager(
             ?.takeIf { it.isNotBlank() }
             ?: return@OnPrimaryClipChangedListener
 
-        // Skip bare media content URIs (coerced form of image clipboard items on older APIs)
-        if (isMediaUri(text)) return@OnPrimaryClipChangedListener
+        if (isMediaUri(text)) {
+            val uri = Uri.parse(text)
+            saveImageIfNew(uri)
+            return@OnPrimaryClipChangedListener
+        }
 
         // Ignore our own paste echoes
         if (text == lastPastedText) {
@@ -76,8 +89,15 @@ class ClipboardHistoryManager(
     fun captureCurrentClipboard() {
         val clip = try { systemClipboard.primaryClip } catch (_: Exception) { null } ?: return
 
-        // Skip screenshots / image clips
-        if (isImageClip(clip)) return
+        if (isImageClip(clip)) {
+            val item = clip.getItemAt(0)
+            val uri = item.uri ?: run {
+                val text = try { item.text?.toString() ?: item.coerceToText(context)?.toString() } catch (_: Exception) { null }
+                if (text != null && text.startsWith("content://")) Uri.parse(text) else null
+            }
+            if (uri != null) saveImageIfNew(uri)
+            return
+        }
 
         val text = try {
             clip.getItemAt(0)
@@ -86,7 +106,11 @@ class ClipboardHistoryManager(
                 ?.takeIf { it.isNotBlank() }
         } catch (_: Exception) { null } ?: return
 
-        if (isMediaUri(text)) return
+        if (isMediaUri(text)) {
+            val uri = Uri.parse(text)
+            saveImageIfNew(uri)
+            return
+        }
 
         saveIfNew(text)
     }
@@ -103,8 +127,20 @@ class ClipboardHistoryManager(
     suspend fun getRecentClips(): List<ClipEntry> = dao.getRecent()
 
     suspend fun togglePin(id: Int)  = dao.togglePin(id)
-    suspend fun deleteClip(id: Int) = dao.delete(id)
-    suspend fun clearAll()          = dao.clearAll()
+    
+    suspend fun deleteClip(id: Int) {
+        val entry = dao.getById(id)
+        if (entry?.isImage == true) {
+            File(entry.text).delete()
+        }
+        dao.delete(id)
+    }
+    
+    suspend fun clearAll() {
+        val all = dao.getAll()
+        all.forEach { if (it.isImage) File(it.text).delete() }
+        dao.clearAll()
+    }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
@@ -126,7 +162,42 @@ class ClipboardHistoryManager(
      * when it cannot read a URI as text (common on older Android versions).
      */
     private fun isMediaUri(text: String): Boolean =
-        text.startsWith("content://media/") && !text.contains(' ')
+        text.startsWith("content://") && !text.contains(' ')
+
+    private val processedImageUris = mutableSetOf<String>()
+
+    private fun saveImageIfNew(uri: Uri) {
+        val uriStr = uri.toString()
+        if (processedImageUris.contains(uriStr)) return
+        
+        scope.launch(Dispatchers.IO) {
+            try {
+                processedImageUris.add(uriStr)
+                if (processedImageUris.size > 20) {
+                    val iterator = processedImageUris.iterator()
+                    iterator.next()
+                    iterator.remove()
+                }
+                
+                val clipsDir = File(context.filesDir, "clips")
+                if (!clipsDir.exists()) clipsDir.mkdirs()
+                val targetFile = File(clipsDir, "clip_${System.currentTimeMillis()}.png")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(targetFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                dao.insert(ClipEntry(text = targetFile.absolutePath, timestamp = System.currentTimeMillis(), isImage = true))
+                pruneOldEntriesWithFiles()
+            } catch (e: Exception) {
+                processedImageUris.remove(uriStr)
+                e.printStackTrace()
+                launch(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Failed to save clipboard image: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     private fun saveIfNew(text: String) {
         scope.launch(Dispatchers.IO) {
@@ -134,8 +205,18 @@ class ClipboardHistoryManager(
             val count  = dao.countRecentWithText(text, cutoff)
             if (count == 0) {
                 dao.insert(ClipEntry(text = text, timestamp = System.currentTimeMillis()))
-                dao.pruneOldEntries()
+                pruneOldEntriesWithFiles()
             }
         }
+    }
+    
+    private suspend fun pruneOldEntriesWithFiles() {
+        val toDelete = dao.getOldEntriesToPrune()
+        for (entry in toDelete) {
+            if (entry.isImage) {
+                File(entry.text).delete()
+            }
+        }
+        dao.pruneOldEntries()
     }
 }

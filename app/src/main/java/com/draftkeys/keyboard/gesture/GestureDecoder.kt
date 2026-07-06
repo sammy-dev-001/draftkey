@@ -101,8 +101,9 @@ class GestureDecoder(private val dictionary: WordDictionary) {
             }
             val lmProb = if (trieNode.isWord) trieNode.probability else 0.000001
             
-            // The LM probability can boost the physical score by up to 1.5x (if extremely common)
-            val lmBoost = 1.0 + (lmProb * 0.5)
+            // The LM probability can boost the physical score by up to 10% max (if extremely common).
+            // A 1.5x boost was too aggressive and made glide typing feel worse because it ignored physical shapes.
+            val lmBoost = 1.0 + (lmProb * 0.10)
 
             word to (combined * boost * lmBoost)
         }.sortedByDescending { it.second }
