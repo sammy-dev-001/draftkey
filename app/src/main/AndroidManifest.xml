@@ -3,8 +3,16 @@
 
     <!-- Needed for haptic feedback on keypresses -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
+        android:name=".DraftKeysApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -27,12 +35,17 @@
         <activity
             android:name=".SettingsActivity"
             android:label="Keyboard Settings"
-            android:theme="@style/Theme.AppCompat.DayNight" />
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".TextShortcutsActivity"
+            android:label="Text Shortcuts"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
         <activity
             android:name=".draft.DraftHistoryActivity"
             android:label="Draft History"
-            android:theme="@style/Theme.AppCompat.DayNight" />
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
         <!--
             KeyboardService: This is the actual keyboard (IME).

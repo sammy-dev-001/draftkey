@@ -3,9 +3,12 @@ package com.draftkeys.keyboard.ui
 import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.draftkeys.keyboard.R
 
 /**
@@ -45,53 +48,35 @@ class SuggestionBarView @JvmOverloads constructor(
     private var colorTv1 = 0xFF_E5E2E1.toInt()
     private var colorTv2 = 0xFF_C4C7C4.toInt()
 
-    private val tvSuggest0: TextView
-    private val tvSuggest1: TextView
-    private val tvSuggest2: TextView
+    private val rvSuggestions: RecyclerView
     private val btnClipboardBar: TextView
+    private val btnVoice: ImageView
     private val btnSettings: ImageView
+    
+    private val adapter = SuggestionAdapter()
 
     init {
         LayoutInflater.from(context).inflate(R.layout.suggestion_bar, this, true)
 
-        tvSuggest0 = findViewById(R.id.tv_suggest_0)
-        tvSuggest1 = findViewById(R.id.tv_suggest_1)
-        tvSuggest2 = findViewById(R.id.tv_suggest_2)
+        rvSuggestions = findViewById(R.id.rv_suggestions)
         btnClipboardBar = findViewById(R.id.btn_clipboard_bar)
+        btnVoice = findViewById(R.id.btn_voice)
         btnSettings = findViewById(R.id.btn_settings)
+
+        rvSuggestions.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+        rvSuggestions.adapter = adapter
 
         btnClipboardBar.setOnClickListener {
             listener?.onClipboardButtonTapped()
         }
 
+        btnVoice.setOnClickListener {
+            listener?.onVoiceTapped()
+        }
+
         btnSettings.setOnClickListener {
             listener?.onSettingsButtonTapped()
         }
-
-        val clickListener = OnClickListener { v ->
-            val index = when (v.id) {
-                R.id.tv_suggest_0 -> 0
-                R.id.tv_suggest_1 -> 1
-                R.id.tv_suggest_2 -> 2
-                else -> -1
-            }
-            if (isUndoMode) {
-                if (index == 0) {
-                    listener?.onAutocorrectUndoTapped(undoOriginal)
-                }
-                isUndoMode = false
-                updateUi()
-                return@OnClickListener
-            }
-            val word = displayWords.getOrNull(index)
-            if (!word.isNullOrEmpty()) {
-                listener?.onSuggestionTapped(word)
-            }
-        }
-
-        tvSuggest0.setOnClickListener(clickListener)
-        tvSuggest1.setOnClickListener(clickListener)
-        tvSuggest2.setOnClickListener(clickListener)
 
         updateUi()
     }
@@ -101,9 +86,7 @@ class SuggestionBarView @JvmOverloads constructor(
         colorTv0 = palette.keySecText
         colorTv1 = palette.keyText
         colorTv2 = palette.keySecText
-        tvSuggest0.setTextColor(colorTv0)
-        tvSuggest1.setTextColor(colorTv1)
-        tvSuggest2.setTextColor(colorTv2)
+        adapter.notifyDataSetChanged()
         btnClipboardBar.setTextColor(palette.keyText)
     }
 
@@ -119,7 +102,7 @@ class SuggestionBarView @JvmOverloads constructor(
 
     fun setSuggestions(words: List<String>) {
         suggestions.clear()
-        suggestions.addAll(words.take(3))
+        suggestions.addAll(words)
         isUndoMode = false
         updateUi()
     }
@@ -134,19 +117,9 @@ class SuggestionBarView @JvmOverloads constructor(
     fun showAutocorrectUndo(original: String) {
         isUndoMode = true
         undoOriginal = original
-        animateTextChange(tvSuggest0, "↩ $original")
-        animateTextChange(tvSuggest1, "")
-        animateTextChange(tvSuggest2, "")
-        
-        // Highlight undo action
-        tvSuggest0.setTextColor(0xFF_FFA500.toInt()) // subtle orange/yellow indicator
-    }
-
-    private fun animateTextChange(tv: TextView, newText: String) {
-        if (tv.text.toString() == newText) return
-        tv.alpha = 0f
-        tv.text = newText
-        tv.animate().alpha(1f).setDuration(150).start()
+        displayWords.clear()
+        displayWords.add("↩ $original")
+        adapter.notifyDataSetChanged()
     }
 
     private fun updateUi() {
@@ -159,19 +132,69 @@ class SuggestionBarView @JvmOverloads constructor(
                 suggestions.none { it.equals(currentTypedWord, ignoreCase = true) }
 
         if (isUnknown) {
-            // Left: typed unknown word  |  Middle + Right: top suggestions
             displayWords.add(currentTypedWord)
-            displayWords.addAll(suggestions.take(2))
+            displayWords.addAll(suggestions)
             unknownWordAtLeft = true
         } else {
-            displayWords.addAll(suggestions.take(3))
+            displayWords.addAll(suggestions)
             unknownWordAtLeft = false
         }
 
-        tvSuggest0.setTextColor(colorTv0)
+        adapter.notifyDataSetChanged()
+        if (displayWords.isNotEmpty()) {
+            rvSuggestions.scrollToPosition(0)
+        }
+    }
+    
+    private inner class SuggestionAdapter : RecyclerView.Adapter<SuggestionAdapter.ViewHolder>() {
+        
+        inner class ViewHolder(val tv: TextView) : RecyclerView.ViewHolder(tv) {
+            init {
+                tv.setOnClickListener {
+                    val index = bindingAdapterPosition
+                    if (index != RecyclerView.NO_POSITION) {
+                        if (isUndoMode) {
+                            if (index == 0) {
+                                listener?.onAutocorrectUndoTapped(undoOriginal)
+                            }
+                            isUndoMode = false
+                            updateUi()
+                            return@setOnClickListener
+                        }
+                        val word = displayWords.getOrNull(index)
+                        if (!word.isNullOrEmpty()) {
+                            listener?.onSuggestionTapped(word)
+                        }
+                    }
+                }
+            }
+        }
 
-        animateTextChange(tvSuggest0, displayWords.getOrNull(0) ?: "")
-        animateTextChange(tvSuggest1, displayWords.getOrNull(1) ?: "")
-        animateTextChange(tvSuggest2, displayWords.getOrNull(2) ?: "")
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val tv = LayoutInflater.from(parent.context).inflate(R.layout.item_suggestion, parent, false) as TextView
+            return ViewHolder(tv)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            holder.tv.text = displayWords[position]
+            
+            if (isUndoMode && position == 0) {
+                holder.tv.setTextColor(0xFF_FFA500.toInt())
+            } else {
+                if (position == 0 && unknownWordAtLeft) {
+                    holder.tv.setTextColor(colorTv0)
+                    holder.tv.paint.isFakeBoldText = false
+                } else if (position == 0 || (position == 1 && unknownWordAtLeft)) {
+                    // Top suggestion
+                    holder.tv.setTextColor(colorTv1)
+                    holder.tv.paint.isFakeBoldText = true
+                } else {
+                    holder.tv.setTextColor(colorTv2)
+                    holder.tv.paint.isFakeBoldText = false
+                }
+            }
+        }
+
+        override fun getItemCount(): Int = displayWords.size
     }
 }

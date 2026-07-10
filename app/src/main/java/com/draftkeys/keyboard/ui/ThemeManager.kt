@@ -20,6 +20,31 @@ class ThemeManager(context: Context) {
         get() = prefs.getFloat("corner_radius", 8f)
         set(value) = prefs.edit().putFloat("corner_radius", value).apply()
 
+    var autoShuffle: Boolean
+        get() = prefs.getBoolean("auto_shuffle", true)
+        set(value) = prefs.edit().putBoolean("auto_shuffle", value).apply()
+
+    var lastShuffleTime: Long
+        get() = prefs.getLong("last_shuffle_time", 0L)
+        set(value) = prefs.edit().putLong("last_shuffle_time", value).apply()
+
+    fun checkAutoShuffle(): Boolean {
+        if (!autoShuffle) return false
+        val now = System.currentTimeMillis()
+        // Shuffle every 3 hours
+        if (now - lastShuffleTime > 3 * 60 * 60 * 1000L) {
+            val themes = THEMES.keys.toList()
+            var newTheme = themes.random()
+            while (newTheme == currentThemeName && themes.size > 1) {
+                newTheme = themes.random()
+            }
+            currentThemeName = newTheme
+            lastShuffleTime = now
+            return true
+        }
+        return false
+    }
+
     data class ThemePalette(
         val bg: Int,
         val keyNormal: Int,
@@ -32,7 +57,10 @@ class ThemeManager(context: Context) {
         val accent: Int,
         /** When true, DraftKeysView renders rainbow per-key colours and the
          *  PlasmaBackgroundView drives the background instead of a solid colour. */
-        val isWild: Boolean = false
+        val isWild: Boolean = false,
+        /** When true, DraftKeysView draws radial touch-pulse ripples on the
+         *  background on every keypress — random hue per tap. */
+        val isPulse: Boolean = false
     )
 
     companion object {
@@ -182,6 +210,21 @@ class ThemeManager(context: Context) {
                 modText     = 0xFFFFFFFF.toInt(),
                 accent      = 0xFFFFFFFF.toInt(),
                 isWild      = true
+            ),
+            "Chromatic Pulse" to ThemePalette(
+                // Pure-black canvas. On every keypress DraftKeysView spawns an expanding
+                // radial ripple at the touch point with a random vivid hue.
+                // Keys are charcoal-transparent so the bursts show through.
+                bg          = 0xFF05050A.toInt(),
+                keyNormal   = Color.argb(70,  30, 30, 45),
+                keyModifier = Color.argb(100, 20, 20, 35),
+                keyPressed  = Color.argb(160, 255, 255, 255),
+                keyShadow   = Color.argb(0, 0, 0, 0),
+                keyText     = 0xFFFFFFFF.toInt(),
+                keySecText  = 0xAAFFFFFF.toInt(),
+                modText     = 0xFFFFFFFF.toInt(),
+                accent      = 0xFFFFFFFF.toInt(),
+                isPulse     = true
             )
         )
     }

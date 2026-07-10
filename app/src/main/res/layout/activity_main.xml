@@ -1,97 +1,235 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    activity_main.xml — Setup / onboarding screen
-
-    This is what users see when they open DraftKeys from their home screen.
-    It guides them through enabling the keyboard in system settings.
+    activity_main.xml — Premium redesign of the DraftKeys setup screen.
 -->
-<LinearLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/keyboard_background"
-    android:gravity="center"
-    android:padding="32dp">
+    android:background="#0D0D10">
 
-    <!-- App Icon -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🎹"
-        android:textSize="72sp" />
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
-    <!-- App Name -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="DraftKeys"
-        android:textColor="@color/accent_blue"
-        android:textSize="34sp"
-        android:textStyle="bold"
-        android:layout_marginTop="16dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-    <!-- Tagline -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Never lose a message again."
-        android:textColor="#AAAAAA"
-        android:textSize="16sp"
-        android:layout_marginTop="8dp" />
+            <!-- ── HERO HEADER ────────────────────────────────────── -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:background="@drawable/settings_header_gradient">
 
-    <!-- Divider -->
-    <View
-        android:layout_width="80dp"
-        android:layout_height="2dp"
-        android:background="@color/accent_blue"
-        android:layout_marginTop="32dp"
-        android:layout_marginBottom="32dp" />
+                <!-- Decorative blob -->
+                <View
+                    android:layout_width="260dp"
+                    android:layout_height="260dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="-80dp"
+                    android:layout_marginEnd="-80dp"
+                    android:background="@drawable/settings_accent_circle"
+                    android:alpha="0.25" />
 
-    <!-- Step instructions -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Step 1: Enable DraftKeys in keyboard settings\nStep 2: Set DraftKeys as your default keyboard\nStep 3: Open any app and start typing!"
-        android:textColor="@color/key_text"
-        android:textSize="14sp"
-        android:lineSpacingExtra="6dp"
-        android:gravity="center" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="bottom"
+                    android:padding="24dp">
 
-    <!-- Status text (updated dynamically) -->
-    <TextView
-        android:id="@+id/tv_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Checking status..."
-        android:textColor="@color/key_text"
-        android:textSize="14sp"
-        android:layout_marginTop="24dp"
-        android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🎹  SMART KEYBOARD"
+                        android:textColor="#88FFFFFF"
+                        android:textSize="11sp"
+                        android:letterSpacing="0.18"
+                        android:layout_marginBottom="4dp" />
 
-    <!-- Button to open system keyboard settings -->
-    <Button
-        android:id="@+id/btn_enable_keyboard"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Open Keyboard Settings"
-        android:backgroundTint="@color/accent_blue"
-        android:textColor="#0D1117"
-        android:textStyle="bold"
-        android:layout_marginTop="32dp"
-        android:paddingHorizontal="32dp"
-        android:paddingVertical="12dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="DraftKeys"
+                        android:textColor="#FFFFFF"
+                        android:textSize="38sp"
+                        android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/btn_settings"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Keyboard Settings"
-        android:backgroundTint="#363638"
-        android:textColor="#E3E2E0"
-        android:textStyle="bold"
-        android:layout_marginTop="16dp"
-        android:paddingHorizontal="32dp"
-        android:paddingVertical="12dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Never lose a message again."
+                        android:textColor="#AEE2FF"
+                        android:textSize="15sp"
+                        android:layout_marginTop="2dp" />
 
-</LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- ── STATUS CARD ────────────────────────────────────── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/settings_card_bg"
+                android:padding="20dp"
+                android:elevation="4dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="System Status"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:id="@+id/tv_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Checking status..."
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:padding="16dp"
+                    android:background="@drawable/settings_pill_track"
+                    android:gravity="center" />
+                    
+            </LinearLayout>
+
+            <!-- ── SETUP CARD ─────────────────────────────────────── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/settings_card_bg"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quick Setup"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+                    <TextView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:text="1"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="@drawable/settings_accent_circle"
+                        android:backgroundTint="#7B5FEF" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Enable DraftKeys in Settings"
+                        android:textColor="#DDDDDD"
+                        android:textSize="14sp"
+                        android:layout_marginStart="12dp"
+                        android:layout_gravity="center_vertical" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+                    <TextView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:text="2"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="@drawable/settings_accent_circle"
+                        android:backgroundTint="#7B5FEF" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Set DraftKeys as your default keyboard"
+                        android:textColor="#DDDDDD"
+                        android:textSize="14sp"
+                        android:layout_marginStart="12dp"
+                        android:layout_gravity="center_vertical" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:text="3"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="@drawable/settings_accent_circle"
+                        android:backgroundTint="#7B5FEF" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Open any app and start typing!"
+                        android:textColor="#DDDDDD"
+                        android:textSize="14sp"
+                        android:layout_marginStart="12dp"
+                        android:layout_gravity="center_vertical" />
+                </LinearLayout>
+                
+                <!-- Open Settings Button (Reuses Settings Done Button style) -->
+                <TextView
+                    android:id="@+id/btn_enable_keyboard"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:text="Open System Settings"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:background="@drawable/settings_done_btn"
+                    android:layout_marginTop="24dp"
+                    android:elevation="6dp" />
+
+            </LinearLayout>
+            
+            <!-- Open App Settings Button -->
+            <TextView
+                android:id="@+id/btn_settings"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="40dp"
+                android:text="Configure DraftKeys"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/settings_done_btn"
+                android:elevation="6dp" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

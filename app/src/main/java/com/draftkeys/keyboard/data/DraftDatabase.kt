@@ -12,6 +12,8 @@ import com.draftkeys.keyboard.prediction.BigramDao
 import com.draftkeys.keyboard.prediction.BigramEntity
 import com.draftkeys.keyboard.prediction.PersonalWordDao
 import com.draftkeys.keyboard.prediction.PersonalWordEntity
+import com.draftkeys.keyboard.prediction.TextExpansionDao
+import com.draftkeys.keyboard.prediction.TextExpansionEntity
 
 /**
  * DraftDatabase — the single Room database for DraftKeys.
@@ -29,9 +31,10 @@ import com.draftkeys.keyboard.prediction.PersonalWordEntity
         DraftEntity::class,
         ClipEntry::class,
         PersonalWordEntity::class,
-        BigramEntity::class
+        BigramEntity::class,
+        TextExpansionEntity::class   // D1: user-defined text expansion shortcuts
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class DraftDatabase : RoomDatabase() {
@@ -40,6 +43,7 @@ abstract class DraftDatabase : RoomDatabase() {
     abstract fun clipDao(): ClipDao
     abstract fun personalWordDao(): PersonalWordDao
     abstract fun bigramDao(): BigramDao
+    abstract fun textExpansionDao(): TextExpansionDao  // D1
 
     companion object {
         @Volatile
@@ -96,6 +100,21 @@ abstract class DraftDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration from v4 → v5: add text_expansions table for user-defined shortcuts (D1).
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS text_expansions (
+                        shortcut  TEXT    PRIMARY KEY NOT NULL,
+                        expansion TEXT    NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): DraftDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -103,7 +122,7 @@ abstract class DraftDatabase : RoomDatabase() {
                     DraftDatabase::class.java,
                     "draft_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

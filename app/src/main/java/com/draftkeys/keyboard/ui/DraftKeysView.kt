@@ -65,7 +65,8 @@ class DraftKeysView @JvmOverloads constructor(
     private var wildHueTick = 0f
     // Per-key hue offset so each key gets a unique colour — assigned once, stable
     private val keyHueOffset = mutableMapOf<KeyModel, Float>()
-
+    
+    private var pulseMode = false
     var expectedNextChars: Set<Char> = emptySet()
     
     // ── Smooth Animation Loop ──────────────────────────────────────────────────
@@ -115,6 +116,7 @@ class DraftKeysView @JvmOverloads constructor(
                 invalidate()
                 frameHandler.postDelayed(this, 16)
             } else {
+                invalidate() // One final draw to render the fully settled states (progress = 0)
                 isAnimating = false
                 keyAnimStates.entries.retainAll { it.value.progress > 0f }
             }
@@ -175,7 +177,7 @@ class DraftKeysView @JvmOverloads constructor(
     fun applyTheme() {
         val theme = themeManager.getTheme()
         cornerRadius = dp(themeManager.cornerRadiusDp)
-        wildMode = theme.isWild
+        wildMode  = theme.isWild
         
         keyNormalPaint.color = theme.keyNormal
         keyModifierPaint.color = theme.keyModifier
@@ -187,11 +189,12 @@ class DraftKeysView @JvmOverloads constructor(
         specialTextPaint.color = theme.accent
         popupPaint.color = theme.keyPressed
         
+        pulseMode = theme.isPulse
         if (wildMode) {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            startAnimationLoop() // keep hue ticking continuously
+            startAnimationLoop()
         } else {
-            setBackgroundColor(theme.bg)
+            setBackgroundColor(if (theme.isPulse) android.graphics.Color.TRANSPARENT else theme.bg)
         }
         invalidate()
     }
@@ -222,6 +225,16 @@ class DraftKeysView @JvmOverloads constructor(
         requestLayout(); rebuildLayout()
     }
 
+    fun switchToSymbolsMore() {
+        layoutType = KeyboardLayoutType.SYMBOLS_MORE
+        requestLayout(); rebuildLayout()
+    }
+
+    fun switchToKaomoji() {
+        layoutType = KeyboardLayoutType.KAOMOJI
+        requestLayout(); rebuildLayout()
+    }
+
     fun switchToEmoji() {
         layoutType = KeyboardLayoutType.EMOJI
         requestLayout(); rebuildLayout()
@@ -238,7 +251,10 @@ class DraftKeysView @JvmOverloads constructor(
         invalidate()
     }
 
-    fun isSymbolMode() = layoutType == KeyboardLayoutType.SYMBOLS
+    fun isSymbolMode() = layoutType == KeyboardLayoutType.SYMBOLS || layoutType == KeyboardLayoutType.SYMBOLS_MORE || layoutType == KeyboardLayoutType.KAOMOJI
+
+    // ── Callbacks ─────────────────────────────────────────────────────────────
+    var onPulse: ((Float, Float) -> Unit)? = null
 
     // ── Drawing ───────────────────────────────────────────────────────────────
 
@@ -251,7 +267,8 @@ class DraftKeysView @JvmOverloads constructor(
             val progress = animState?.progress ?: 0f
             val isAnimKey = progress > 0f
 
-            if (wildMode) {
+            val useWildForThisKey = wildMode || (pulseMode && isAnimKey)
+            if (useWildForThisKey) {
                 // ── Wild mode: per-key rainbow hue fill + neon border ──
                 val offset = keyHueOffset.getOrPut(key) {
                     // Give each key a unique stable offset based on its position
@@ -537,7 +554,11 @@ class DraftKeysView @JvmOverloads constructor(
                         
                         // Only trigger tap if we didn't trigger a special swipe mode
                         if (!ptr.isLongPressTriggered && !ptr.isWordDeleteTriggered) {
-                            listener?.onKey(ptr.currentKey!!.code, ptr.startX, ptr.startY)
+                            if (ptr.currentKey!!.code == KeyboardLayout.CODE_TEXT_INSERT) {
+                                listener?.onLongPressText(ptr.currentKey!!.label)
+                            } else {
+                                listener?.onKey(ptr.currentKey!!.code, ptr.startX, ptr.startY)
+                            }
                         }
                     }
                     activePointers.remove(pointerId)
@@ -550,6 +571,9 @@ class DraftKeysView @JvmOverloads constructor(
     private fun setKeyPressed(key: KeyModel, pressed: Boolean) {
         val state = keyAnimStates.getOrPut(key) { KeyAnimState() }
         state.isPressed = pressed
+        if (pressed) {
+            onPulse?.invoke(key.bounds.centerX(), key.bounds.centerY())
+        }
         startAnimationLoop()
     }
     

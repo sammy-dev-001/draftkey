@@ -17,54 +17,23 @@
         android:background="?android:attr/selectableItemBackgroundBorderless"
         android:contentDescription="Clipboard" />
 
-    <LinearLayout
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_suggestions"
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingHorizontal="16dp">
+        android:clipToPadding="false" />
 
-        <TextView
-            android:id="@+id/tv_suggest_0"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="#C4C7C4"
-            android:fontFamily="@font/hanken_grotesk"
-            android:textSize="14sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:background="?android:attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/tv_suggest_1"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="#E5E2E1"
-            android:textStyle="bold"
-            android:fontFamily="@font/hanken_grotesk"
-            android:textSize="15sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:background="?android:attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/tv_suggest_2"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="#C4C7C4"
-            android:fontFamily="@font/hanken_grotesk"
-            android:textSize="14sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:background="?android:attr/selectableItemBackground" />
-    </LinearLayout>
+    <ImageView
+        android:id="@+id/btn_voice"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:padding="4dp"
+        android:src="@drawable/ic_mic"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Voice Input"
+        android:alpha="0.7" />
 
     <ImageView
         android:id="@+id/btn_settings"

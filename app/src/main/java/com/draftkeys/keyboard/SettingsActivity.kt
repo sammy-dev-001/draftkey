@@ -9,6 +9,9 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Switch
+import android.content.Context
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.setPadding
 import com.draftkeys.keyboard.ui.ThemeManager
@@ -42,6 +45,24 @@ class SettingsActivity : AppCompatActivity() {
 
         buildThemeSwatches()
         setupShapePills()
+        
+        // D1.5 / B3: Advanced Features
+        val prefs = getSharedPreferences("draftkeys_prefs", Context.MODE_PRIVATE)
+        val switchAggressive = findViewById<Switch>(R.id.switchAggressiveAutocorrect)
+        switchAggressive.isChecked = prefs.getBoolean("aggressive_autocorrect", false)
+        switchAggressive.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("aggressive_autocorrect", isChecked).apply()
+        }
+
+        val switchAutoShuffle = findViewById<Switch>(R.id.switchAutoShuffle)
+        switchAutoShuffle.isChecked = themeManager.autoShuffle
+        switchAutoShuffle.setOnCheckedChangeListener { _, isChecked ->
+            themeManager.autoShuffle = isChecked
+        }
+
+        findViewById<View>(R.id.btnTextShortcuts).setOnClickListener {
+            startActivity(Intent(this, TextShortcutsActivity::class.java))
+        }
 
         findViewById<View>(R.id.btnSaveSettings).setOnClickListener {
             finish()
@@ -108,10 +129,10 @@ class SettingsActivity : AppCompatActivity() {
         val ringSize = (60 * dp).toInt()
 
         // The colour circle
-        val keyColor = if (palette.keyNormal == Color.TRANSPARENT) {
-            0xFF1B0A3D.toInt()  // Plasma Storm fallback swatch colour
-        } else {
-            palette.keyNormal
+        val keyColor = when {
+            palette.keyNormal == Color.TRANSPARENT -> 0xFF1B0A3D.toInt() // Plasma Storm
+            palette.isPulse -> 0xFF6A0DAD.toInt()                         // Chromatic Pulse: vivid purple
+            else -> palette.keyNormal
         }
 
         val circle = View(this).apply {
@@ -119,13 +140,22 @@ class SettingsActivity : AppCompatActivity() {
             layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                // Linear top-to-bottom gradient: highlight -> key colour -> shadow
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                colors = intArrayOf(
-                    blendWith(keyColor, 0xFFFFFFFF.toInt(), 0.35f),
-                    keyColor,
-                    blendWith(keyColor, 0xFF000000.toInt(), 0.35f)
-                )
+                if (palette.isPulse) {
+                    // Chromatic Pulse: iridescent diagonal gradient purple → cyan → magenta
+                    orientation = GradientDrawable.Orientation.TL_BR
+                    colors = intArrayOf(
+                        0xFFFF00CC.toInt(),   // hot pink
+                        0xFF6A0DAD.toInt(),   // deep purple
+                        0xFF00EEFF.toInt()    // electric cyan
+                    )
+                } else {
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    colors = intArrayOf(
+                        blendWith(keyColor, 0xFFFFFFFF.toInt(), 0.35f),
+                        keyColor,
+                        blendWith(keyColor, 0xFF000000.toInt(), 0.35f)
+                    )
+                }
             }
         }
 

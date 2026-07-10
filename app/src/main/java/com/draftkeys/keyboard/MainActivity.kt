@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
+import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
@@ -24,12 +24,16 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // Opens Android's keyboard selection settings so the user can enable DraftKeys
-        findViewById<Button>(R.id.btn_enable_keyboard).setOnClickListener {
+        findViewById<View>(R.id.btn_enable_keyboard).setOnClickListener {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         }
 
-        findViewById<Button>(R.id.btn_settings).setOnClickListener {
+        findViewById<View>(R.id.btn_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        if (intent.getBooleanExtra("request_audio", false)) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
     }
 
@@ -50,10 +54,10 @@ class MainActivity : AppCompatActivity() {
         val statusText = findViewById<TextView>(R.id.tv_status)
         if (isActive) {
             statusText.text = "✅ DraftKeys is active!"
-            statusText.setTextColor(getColor(R.color.accent_blue))
+            statusText.setTextColor(android.graphics.Color.parseColor("#AEE2FF"))
         } else {
             statusText.text = "⚠️ DraftKeys is not set as default keyboard"
-            statusText.setTextColor(0xFFFF8C00.toInt()) // Orange warning
+            statusText.setTextColor(android.graphics.Color.parseColor("#FFB86C"))
         }
     }
 }

@@ -92,4 +92,9 @@ interface KeyboardActionListener {
      * The clipboard panel toggle button (toolbar) was tapped.
      */
     fun onClipboardButtonTapped()
+    
+    /**
+     * The voice input microphone button was tapped.
+     */
+    fun onVoiceTapped()
 }

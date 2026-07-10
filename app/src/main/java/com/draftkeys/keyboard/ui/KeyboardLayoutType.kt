@@ -9,5 +9,9 @@ enum class KeyboardLayoutType {
     /** Emoji layout. */
     EMOJI,
     /** Numeric keypad with 4 rows for numbers and basic symbols. */
-    NUMPAD
+    NUMPAD,
+    /** Second page of symbols / punctuation. */
+    SYMBOLS_MORE,
+    /** Screen with ASCII emoticons / Kaomoji. */
+    KAOMOJI
 }

@@ -100,6 +100,10 @@ class KeyboardLayout private constructor(
         const val CODE_SHIFT        = -1
         const val CODE_BACKSPACE    = -5
         const val CODE_MODE_CHANGE  = -2
+        const val CODE_SYMBOLS_PAGE_1 = -105
+        const val CODE_SYMBOLS_PAGE_2 = -106
+        const val CODE_EMOTICON = -107
+        const val CODE_TEXT_INSERT = -109
         const val CODE_CURSOR_LEFT  = -100
         const val CODE_CURSOR_RIGHT = -101
 
@@ -136,6 +140,8 @@ class KeyboardLayout private constructor(
             val rowDefs = when (type) {
                 KeyboardLayoutType.QWERTY -> qwertyRows()
                 KeyboardLayoutType.SYMBOLS -> symbolsRows()
+                KeyboardLayoutType.SYMBOLS_MORE -> symbolsMoreRows()
+                KeyboardLayoutType.KAOMOJI -> kaomojiRows()
                 KeyboardLayoutType.EMOJI -> emojiRows()
                 KeyboardLayoutType.NUMPAD -> numpadRows()
             }
@@ -170,6 +176,25 @@ class KeyboardLayout private constructor(
 
             return KeyboardLayout(keys)
         }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // Layout Definitions
+        // ════════════════════════════════════════════════════════════════════════
+
+        private fun numpadRows() = listOf(
+            row(
+                key('1'.code, "1", widthFraction = 0.25f), key('2'.code, "2", widthFraction = 0.25f), key('3'.code, "3", widthFraction = 0.25f), mod(CODE_BACKSPACE, "⌫", 0.25f)
+            ),
+            row(
+                key('4'.code, "4", widthFraction = 0.25f), key('5'.code, "5", widthFraction = 0.25f), key('6'.code, "6", widthFraction = 0.25f), key('-'.code, "-", widthFraction = 0.25f)
+            ),
+            row(
+                key('7'.code, "7", widthFraction = 0.25f), key('8'.code, "8", widthFraction = 0.25f), key('9'.code, "9", widthFraction = 0.25f), key(' '.code, "␣", widthFraction = 0.25f)
+            ),
+            row(
+                mod(CODE_MODE_CHANGE, "?123", 0.25f), key('0'.code, "0", widthFraction = 0.25f), key('.'.code, ".", widthFraction = 0.25f), mod(10, "↵", 0.25f)
+            )
+        )
 
         // ─────────────────────────────────────────────────────────
         // QWERTY row definitions
@@ -230,26 +255,85 @@ class KeyboardLayout private constructor(
             ),
             // ── Row 1: Symbols ─────────────────────────────────────
             row(
-                key('@'.code, "@"), key('#'.code, "#"), key('$'.code, "$"),
-                key('%'.code, "%"), key('&'.code, "&"), key('-'.code, "-"),
-                key('+'.code, "+"), key('('.code, "("), key(')'.code, ")"),
-                key('/'.code, "/")
+                key('@'.code, "@", alternates = listOf("©", "®")), 
+                key('#'.code, "#", alternates = listOf("№")), 
+                key('$'.code, "$", alternates = listOf("€", "£", "¥", "¢")),
+                key('%'.code, "%", alternates = listOf("‰")), 
+                key('&'.code, "&"), 
+                key('-'.code, "-", alternates = listOf("_", "—", "–")),
+                key('+'.code, "+", alternates = listOf("±")), 
+                key('('.code, "(", alternates = listOf("[", "{", "<")), 
+                key(')'.code, ")", alternates = listOf("]", "}", ">")),
+                key('/'.code, "/", alternates = listOf("\\", "|"))
             ),
             // ── Row 2: More symbols (9 keys) ───────────────────────
             row(
-                key('?'.code, "?",  0.111f), key('!'.code, "!",  0.111f),
-                key('"'.code, "\"", 0.111f), key('\''.code,"'",  0.111f),
-                key(':'.code, ":",  0.111f), key(';'.code, ";",  0.111f),
-                key('='.code, "=",  0.111f), key('*'.code, "*",  0.111f),
+                key('?'.code, "?",  0.111f, alternates = listOf("¿")), 
+                key('!'.code, "!",  0.111f, alternates = listOf("¡")),
+                key('"'.code, "\"", 0.111f, alternates = listOf("“", "”", "„")), 
+                key('\''.code,"'",  0.111f, alternates = listOf("‘", "’", "`")),
+                key(':'.code, ":",  0.111f), 
+                key(';'.code, ";",  0.111f),
+                key('='.code, "=",  0.111f, alternates = listOf("≈", "≠", "≡")), 
+                key('*'.code, "*",  0.111f, alternates = listOf("×", "÷", "★")),
                 mod(CODE_BACKSPACE, "⌫",    0.112f)
             ),
             // ── Row 3: Bottom row ───────────────────────────────────
             row(
                 mod(CODE_MODE_CHANGE,  "ABC", 0.20f),
-                mod(CODE_CURSOR_LEFT,  "←",   0.10f),
+                mod(CODE_EMOTICON,     "^_^", 0.10f, alternates = listOf("¯\\_(ツ)_/¯", "( ͡° ͜ʖ ͡°)", "ಠ_ಠ", "ʕ•ᴥ•ʔ", "(╯°□°)╯︵ ┻━┻", "༼ つ ◕_◕ ༽つ")),
                 mod(32,                "SPACE",0.40f),
-                mod(CODE_CURSOR_RIGHT, "→",   0.10f),
+                mod(CODE_SYMBOLS_PAGE_2, "2/2", 0.10f),
                 mod(10,                "↵",   0.20f)
+            )
+        )
+
+        private fun symbolsMoreRows() = listOf(
+            row(
+                key('~'.code, "~"), key('`'.code, "`"), key('|'.code, "|"),
+                key('•'.code, "•"), key('√'.code, "√"), key('π'.code, "π"),
+                key('÷'.code, "÷"), key('×'.code, "×"), key('¶'.code, "¶"),
+                key('∆'.code, "∆")
+            ),
+            row(
+                key('£'.code, "£"), key('¢'.code, "¢"), key('€'.code, "€"),
+                key('¥'.code, "¥"), key('^'.code, "^"), key('°'.code, "°"),
+                key('='.code, "="), key('{'.code, "{"), key('}'.code, "}"),
+                key('\\'.code, "\\")
+            ),
+            row(
+                key('%'.code, "%"), key('©'.code, "©"),
+                key('®'.code, "®"), key('™'.code, "™"),
+                key('✓'.code, "✓"), key('['.code, "["),
+                key(']'.code, "]"), key('<'.code, "<"),
+                key('>'.code, ">"),
+                mod(CODE_BACKSPACE, "⌫", 0.1f)
+            ),
+            row(
+                mod(CODE_MODE_CHANGE,  "ABC", 0.20f),
+                mod(CODE_SYMBOLS_PAGE_1, "1/2", 0.10f),
+                mod(32,                "SPACE",0.40f),
+                mod(CODE_SYMBOLS_PAGE_2, "2/2", 0.10f),
+                mod(10,                "↵",   0.20f)
+            )
+        )
+
+        // ─────────────────────────────────────────────────────────
+        // Kaomoji row definitions
+        // ─────────────────────────────────────────────────────────
+
+        private fun kaomojiRows() = listOf(
+            row(
+                mod(CODE_TEXT_INSERT, "¯\\_(ツ)_/¯", 0.33f), mod(CODE_TEXT_INSERT, "( ͡° ͜ʖ ͡°)", 0.33f), mod(CODE_TEXT_INSERT, "ಠ_ಠ", 0.34f)
+            ),
+            row(
+                mod(CODE_TEXT_INSERT, "ʕ•ᴥ•ʔ", 0.33f), mod(CODE_TEXT_INSERT, "(╯°□°)╯", 0.33f), mod(CODE_TEXT_INSERT, "༼ つ ◕_◕ ༽つ", 0.34f)
+            ),
+            row(
+                mod(CODE_TEXT_INSERT, "•ᴗ•", 0.33f), mod(CODE_TEXT_INSERT, "T_T", 0.33f), mod(CODE_TEXT_INSERT, "♡", 0.34f)
+            ),
+            row(
+                mod(CODE_MODE_CHANGE, "ABC", 0.20f), mod(CODE_TEXT_INSERT, "(-_-)", 0.30f), mod(CODE_TEXT_INSERT, "(* ^ ω ^)", 0.30f), mod(CODE_BACKSPACE, "⌫", 0.20f)
             )
         )
 
@@ -296,8 +380,8 @@ class KeyboardLayout private constructor(
         ) = KeyDef(code, label, widthFraction, isModifier = false, secondaryLabel = secondaryLabel, alternates = alternates)
 
         /** Modifier / action key. */
-        private fun mod(code: Int, label: String, widthFraction: Float) =
-            KeyDef(code, label, widthFraction, isModifier = true)
+        private fun mod(code: Int, label: String, widthFraction: Float, alternates: List<String> = emptyList()) =
+            KeyDef(code, label, widthFraction, isModifier = true, alternates = alternates)
 
         /** Row with an optional horizontal x-offset (for the centred ASDF row). */
         private fun row(vararg keys: KeyDef, xOffset: Float = 0f) =

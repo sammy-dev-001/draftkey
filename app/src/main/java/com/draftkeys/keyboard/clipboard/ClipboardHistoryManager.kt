@@ -1,9 +1,11 @@
 package com.draftkeys.keyboard.clipboard
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +44,15 @@ class ClipboardHistoryManager(
 
     private val listener = ClipboardManager.OnPrimaryClipChangedListener {
         val clip = systemClipboard.primaryClip ?: return@OnPrimaryClipChangedListener
+
+        // 🔒 Security fix: never log passwords or 2FA codes.
+        // Password managers (1Password, Bitwarden, Samsung Pass) mark sensitive
+        // clipboard data using EXTRA_IS_SENSITIVE on Android 13+ (API 33).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (clip.description.extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE) == true) {
+                return@OnPrimaryClipChangedListener
+            }
+        }
 
         if (isImageClip(clip)) {
             val item = clip.getItemAt(0)
@@ -88,6 +99,11 @@ class ClipboardHistoryManager(
      */
     fun captureCurrentClipboard() {
         val clip = try { systemClipboard.primaryClip } catch (_: Exception) { null } ?: return
+
+        // 🔒 Security fix: same sensitive-data guard as the live listener.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (clip.description.extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE) == true) return
+        }
 
         if (isImageClip(clip)) {
             val item = clip.getItemAt(0)

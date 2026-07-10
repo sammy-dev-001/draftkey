@@ -7,19 +7,26 @@ import kotlinx.coroutines.withContext
 /**
  * PredictionEngine — word completion, autocorrect, and next-word prediction.
  *
- * This uses a high-performance Trie-based Damerau-Levenshtein automaton.
- * Instead of calculating the edit distance against every word in the dictionary independently,
- * it traverses the `WordTrie` and calculates the DP matrix rows incrementally,
- * heavily pruning branches that exceed the error threshold.
+ * Constructor:
+ *  [dictionary]        — the loaded WordDictionary (Trie + inverted index).
+ *  [personalWordCache] — B2: in-memory mirror of personal_words (no per-keystroke SQLite).
+ *  [bigramDao]         — user-learned bigram transitions (queried only on next-word predict).
+ *  [staticBigrams]     — 3.1MB Norvig corpus bigrams (queried only on next-word predict).
+ *  [textExpansionDao]  — D1: user-defined shortcut → expansion pairs.
  */
 class PredictionEngine(
     private val dictionary: WordDictionary,
-    private val personalWordDao: PersonalWordDao
+    private val personalWordCache: PersonalWordCache,
+    private val bigramDao: BigramDao,
+    private val staticBigrams: StaticBigrams,
+    private val textExpansionDao: TextExpansionDao
 ) {
+    // Convenience alias — keeps internal call sites readable
+    private val personalWordDao get() = personalWordCache
 
     // ── Cache ─────────────────────────────────────────────────────────────────
-    private val autocorrectCache = object : LinkedHashMap<String, String?>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: Map.Entry<String, String?>) = size > 50
+    private val autocorrectCache = object : LinkedHashMap<String, String?>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, String?>) = size > 500
     }
 
     // ── Common typos (fast path before expensive edit-distance search) ────────
@@ -35,7 +42,7 @@ class PredictionEngine(
         "didnt" to "didn't", "couldnt" to "couldn't", "wouldnt" to "wouldn't",
         "shouldnt" to "shouldn't", "youll" to "you'll", "theyll" to "they'll", "itll" to "it'll",
         "its" to "it's",
-        "ot" to "to", "tto" to "too",
+        "ot" to "to", "tto" to "too", "wjat" to "what", "whay" to "what",
         "bcuz" to "because", "cuz" to "because",
         "recieve"    to "receive",     "seperate"   to "separate",
         "occured"    to "occurred",    "occuring"   to "occurring",
@@ -90,6 +97,71 @@ class PredictionEngine(
         "confused" to "😕", "morning" to "🌅", "mad" to "😡", "glad" to "😊"
     )
 
+    // ── Abbreviation expansion ────────────────────────────────────────────────
+    // D4: Offer full phrases when user types a known abbreviation
+    private val abbreviations = mapOf(
+        "omw"  to "On my way!",
+        "brb"  to "Be right back",
+        "gtg"  to "Got to go",
+        "ttyl" to "Talk to you later",
+        "imo"  to "In my opinion",
+        "imho" to "In my humble opinion",
+        "fyi"  to "For your information",
+        "asap" to "As soon as possible",
+        "nvm"  to "Never mind",
+        "lmk"  to "Let me know",
+        "idk"  to "I don't know",
+        "irl"  to "In real life",
+        "afk"  to "Away from keyboard",
+        "gg"   to "Good game",
+        "gl"   to "Good luck",
+        "np"   to "No problem",
+        "ty"   to "Thank you",
+        "yw"   to "You're welcome",
+        "hbd"  to "Happy birthday",
+        "smh"  to "Shaking my head",
+        "tbh"  to "To be honest",
+        "ngl"  to "Not gonna lie",
+        "icymi" to "In case you missed it",
+        "tldr" to "Too long, didn't read",
+        "ootd" to "Outfit of the day",
+        "wfh"  to "Working from home"
+    )
+
+    // ── Contraction / apostrophe completion ──────────────────────────────
+    // C3: Proactively suggest the apostrophe form when a contraction base is typed
+    private val contractionBoosts = mapOf(
+        "don"    to listOf("don't"),
+        "can"    to listOf("can't"),
+        "won"    to listOf("won't"),
+        "isn"    to listOf("isn't"),
+        "aren"   to listOf("aren't"),
+        "wasn"   to listOf("wasn't"),
+        "weren"  to listOf("weren't"),
+        "haven"  to listOf("haven't"),
+        "hasn"   to listOf("hasn't"),
+        "hadn"   to listOf("hadn't"),
+        "didn"   to listOf("didn't"),
+        "doesn"  to listOf("doesn't"),
+        "wouldn" to listOf("wouldn't"),
+        "couldn" to listOf("couldn't"),
+        "shouldn" to listOf("shouldn't"),
+        "it"     to listOf("it's"),
+        "i"      to listOf("I'm", "I'll", "I've"),
+        "you"    to listOf("you're", "you'll", "you've"),
+        "they"   to listOf("they're", "they'll", "they've"),
+        "we"     to listOf("we're", "we'll", "we've"),
+        "he"     to listOf("he's"),
+        "she"    to listOf("she's"),
+        "that"   to listOf("that's"),
+        "what"   to listOf("what's"),
+        "there"  to listOf("there's"),
+        "here"   to listOf("here's"),
+        "who"    to listOf("who's"),
+        "how"    to listOf("how's"),
+        "let"    to listOf("let's")
+    )
+
     // ── QWERTY keyboard adjacency map ─────────────────────────────────────────
     private val ADJACENT: Map<Char, Set<Char>> = mapOf(
         'q' to setOf('w', 'a', 's'),
@@ -124,45 +196,60 @@ class PredictionEngine(
 
     suspend fun getSuggestions(
         prefix: String,
-        maxResults: Int = 3
+        maxResults: Int = 5
     ): List<String> = withContext(Dispatchers.Default) {
         if (prefix.isEmpty()) return@withContext emptyList()
         val pfx = prefix.lowercase()
 
-        val personal = personalWordDao.getAll()
+        // 1. User-defined text expansion shortcuts — D1: highest priority
+        //    (e.g. user has "addr" → "123 Main Street" — always show it first)
+        val userExpansion = textExpansionDao.find(pfx)
+        if (userExpansion != null) {
+            // Return the expansion as top slot, fill remaining slots with Trie matches
+            val rest = dictionary.trie.getCompletions(pfx, maxResults - 1).map { it.first }
+            return@withContext (listOf(userExpansion.expansion) + rest).distinct().take(maxResults)
+        }
+
+        // 2. Personal words (in-memory cache — B2: no SQLite per keystroke)
+        val personal = personalWordCache.getAll()
             .filter { it.word.startsWith(pfx) }
             .sortedByDescending { it.frequency }
             .map { it.word }
 
-        // Fast prefix search using pre-sorted dictionary words (sorted by frequency)
-        val dictMatches = dictionary.words.asSequence()
-            .filter { it.startsWith(pfx) }
-            .take(maxResults * 5)
-            .toList()
+        // 2. Abbreviation expansion — D4: exact match offers full phrase (e.g. "omw" → "On my way!")
+        val abbreviationMatch = abbreviations[pfx]?.let { listOf(it) } ?: emptyList()
 
-        val sortedDictMatches = dictMatches.filter { it !in personal }
+        // 3. Contraction boost — C3: proactively suggest apostrophe form (e.g. "don" → "don't")
+        val contractionMatch = contractionBoosts[pfx] ?: emptyList()
 
+        // 4. Common typo fast path (hardcoded map — avoids expensive Trie search)
         val exactTypo = commonTypos[pfx]
         val typoMatch = if (exactTypo != null) listOf(preserveCase(prefix, exactTypo)) else emptyList()
 
-        // Emoji prediction for the exact word
+        // 5. Trie BFS prefix search — B1: O(k) instead of O(N) linear scan
+        val trieMatches = dictionary.trie.getCompletions(pfx, maxResults * 5)
+            .map { it.first }
+            .filter { it !in personal }
+
+        // 6. Emoji prediction for the exact word
         val emojiMatch = emojiMap[pfx]?.let { listOf(it) } ?: emptyList()
 
-        // Live Fuzzy Search (Autocorrect while typing)
+        // 7. Live Fuzzy Search (only when Trie finds nothing and no fast-path typo match)
         var fuzzyMatch: List<String> = emptyList()
-        if (pfx.length >= 3 && sortedDictMatches.isEmpty() && exactTypo == null) {
+        if (pfx.length >= 3 && trieMatches.isEmpty() && exactTypo == null) {
             val candidate = autocorrect(prefix)
             if (candidate != null && candidate.lowercase() != pfx) {
                 fuzzyMatch = listOf(candidate)
             }
         }
 
-        (typoMatch + fuzzyMatch + personal + sortedDictMatches + emojiMatch).distinct().take(maxResults)
+        (abbreviationMatch + contractionMatch + typoMatch + fuzzyMatch + personal + trieMatches + emojiMatch)
+            .distinct().take(maxResults)
     }
 
     // ── Autocorrect ───────────────────────────────────────────────────────────
 
-    suspend fun autocorrect(word: String): String? = withContext(Dispatchers.Default) {
+    suspend fun autocorrect(word: String, bigramContext: String? = null): String? = withContext(Dispatchers.Default) {
         val lower = word.lowercase()
 
         synchronized(autocorrectCache) {
@@ -185,7 +272,13 @@ class PredictionEngine(
             lower.length <= 6 -> 2.1 // Allow 2 full mistakes
             else -> 2.6
         }
-        val candidate = trieSearch(lower, threshold)
+
+        // C2: Fetch expected words to boost their confidence
+        val expectedNextWords = if (bigramContext != null) {
+            nextWordSuggestions(bigramContext)
+        } else emptyList()
+
+        val candidate = trieSearch(lower, threshold, expectedNextWords)
 
         if (candidate != null) {
             val corrected = preserveCase(word, candidate)
@@ -218,7 +311,7 @@ class PredictionEngine(
         return@withContext null
     }
 
-    private fun trieSearch(target: String, maxCost: Double): String? {
+    private fun trieSearch(target: String, maxCost: Double, expectedWords: List<String>): String? {
         val targetLen = target.length
         val currentRow = DoubleArray(targetLen + 1) { it.toDouble() }
         
@@ -273,8 +366,11 @@ class PredictionEngine(
                 val finalCost = nextRow[targetLen]
                 if (finalCost <= maxCost) {
                     val lmProb = maxOf(node.probability, 0.000001)
+                    // C2: If the bigram model predicted this word, treat it as having 1 fewer typo
+                    val bigramBonus = if (wordSoFar in expectedWords) 1.0 else 0.0
+                    
                     // Lower is better. Combine edit distance with language model probability.
-                    val combinedScore = finalCost - kotlin.math.ln(lmProb) * 0.15
+                    val combinedScore = finalCost - bigramBonus - kotlin.math.ln(lmProb) * 0.15
                     if (combinedScore < bestCombinedScore) {
                         bestCombinedScore = combinedScore
                         bestMatch = wordSoFar
@@ -309,31 +405,62 @@ class PredictionEngine(
         if (word.isBlank() || commonTypos.containsKey(word.lowercase())) return@withContext
         val cleanWord = word.trim('"', ' ', '.', ',', '!', '?', '\'', ':', ';', '(', ')', '[', ']')
         if (cleanWord.isEmpty()) return@withContext
+        
+        synchronized(autocorrectCache) {
+            autocorrectCache.remove(cleanWord.lowercase())
+        }
+        
         personalWordDao.learn(cleanWord)
     }
 
     suspend fun isKnownWord(word: String): Boolean = withContext(Dispatchers.Default) {
         val lower = word.lowercase()
-        // Fast Trie search
+        // Fast Trie search first (O(k))
         var current = dictionary.trie.root
         for (char in lower) {
-            current = current.children[char] ?: return@withContext personalWordDao.getFrequency(lower) > 0
+            current = current.children[char]
+                // B2: cache.contains() is O(1) HashSet — no SQLite roundtrip
+                ?: return@withContext personalWordCache.contains(lower)
         }
         if (current.isWord) return@withContext true
-        return@withContext personalWordDao.getFrequency(lower) > 0
+        // B2: use in-memory cache for personal words check
+        return@withContext personalWordCache.contains(lower)
     }
+
+    suspend fun learnWord(word: String) = withContext(Dispatchers.IO) {
+        val clean = word.trim().lowercase()
+        if (clean.length < 2) return@withContext
+        personalWordDao.learn(clean)
+    }
+
+    suspend fun learnBigram(word1: String?, word2: String?) = withContext(Dispatchers.IO) {
+        if (word1.isNullOrBlank() || word2.isNullOrBlank()) return@withContext
+        val clean1 = word1.trim().lowercase()
+        val clean2 = word2.trim().lowercase()
+        bigramDao.learn(clean1, clean2)
+    }
+
+    // ── Helper functions ──────────────────────────────────────────────────────
 
     // ── Next-word prediction ──────────────────────────────────────────────────
 
     suspend fun nextWordSuggestions(previousWord: String): List<String> =
-        withContext(Dispatchers.Default) {
-            BIGRAMS[previousWord.lowercase()]
-                ?.let { return@withContext it }
+        withContext(Dispatchers.IO) {
+            val lower = previousWord.lowercase()
 
-            val personal = personalWordDao.getAll().take(3).map { it.word }
-            if (personal.isNotEmpty()) return@withContext personal
+            // 1. User-learned bigrams — highest priority (personalised transitions)
+            val personalBigrams = bigramDao.getPredictions(lower, limit = 3)
+            if (personalBigrams.isNotEmpty()) return@withContext personalBigrams
 
-            emptyList()
+            // 2. Static Norvig corpus bigrams (3.1MB DB — covers hundreds of thousands of pairs)
+            val staticResults = staticBigrams.getPredictions(lower, limit = 3)
+            if (staticResults.isNotEmpty()) return@withContext staticResults
+
+            // 3. Hardcoded fallback map (~170 common pairs) — last resort
+            BIGRAMS[lower]?.let { return@withContext it }
+
+            // 4. Generic fallback: most-used personal words regardless of context
+            personalWordDao.getAll().take(3).map { it.word }
         }
 
     // ── Dynamic Hitbox Prediction ─────────────────────────────────────────────

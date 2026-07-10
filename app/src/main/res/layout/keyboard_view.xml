@@ -19,11 +19,22 @@
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- ── PLASMA BACKGROUND (hidden unless Plasma Storm theme active) ── -->
     <com.draftkeys.keyboard.ui.PlasmaBackgroundView
         android:id="@+id/plasma_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignTop="@+id/keyboard_content"
+        android:layout_alignBottom="@+id/keyboard_content"
+        android:visibility="gone" />
+
+    <!-- ── PULSE BACKGROUND (hidden unless Chromatic Pulse theme active) ── -->
+    <com.draftkeys.keyboard.ui.PulseBackgroundView
+        android:id="@+id/pulse_bg"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_alignTop="@+id/keyboard_content"
@@ -35,7 +46,9 @@
         android:id="@+id/keyboard_content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <!-- ── SCROLLABLE TOOLBAR ──────────────────────────────────── -->
     <HorizontalScrollView
@@ -125,7 +138,9 @@
     <!-- FrameLayout so both views occupy the same space and one can be GONE -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <com.draftkeys.keyboard.ui.DraftKeysView
             android:id="@+id/draft_keys_view"

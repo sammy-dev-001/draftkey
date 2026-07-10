@@ -6,6 +6,7 @@ import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.view.LayoutInflater
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.InputType
@@ -23,6 +24,7 @@ import com.draftkeys.keyboard.gesture.GestureDecoder
 import com.draftkeys.keyboard.gesture.GesturePoint
 import com.draftkeys.keyboard.gesture.WordDictionary
 import com.draftkeys.keyboard.prediction.PredictionEngine
+import com.draftkeys.keyboard.prediction.PersonalWordCache
 import com.draftkeys.keyboard.ui.DraftKeysView
 import com.draftkeys.keyboard.ui.KeyboardActionListener
 import com.draftkeys.keyboard.ui.KeyboardLayout
@@ -106,6 +108,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
     private lateinit var staticBigrams:     com.draftkeys.keyboard.prediction.StaticBigrams
     private lateinit var predictionEngine:  PredictionEngine
     private lateinit var clipboardManager:  ClipboardHistoryManager
+    private lateinit var personalWordCache: PersonalWordCache  // B2: in-memory mirror of personal_words
 
     private var lastCommittedWord: String? = null
 
@@ -127,13 +130,25 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         val db = DraftDatabase.getInstance(this)
         repository       = DraftRepository(db.draftDao())
         clipboardManager = ClipboardHistoryManager(this, db.clipDao(), serviceScope)
-        // Initialise dictionary first so both PredictionEngine and GestureDecoder share it
-        dictionary       = WordDictionary(this)
-        staticBigrams    = com.draftkeys.keyboard.prediction.StaticBigrams(this)
-        predictionEngine = PredictionEngine(dictionary, db.personalWordDao(), db.bigramDao(), staticBigrams)
+        // B2: PersonalWordCache — primed async below, eliminates per-keystroke SQLite hits
+        personalWordCache = PersonalWordCache(db.personalWordDao(), serviceScope)
+
+        // Fix 3: Reuse the Application-level singletons instead of re-loading from disk.
+        // DraftKeysApplication.onCreate() already triggered the background load; by the
+        // time the user starts typing the dictionary is fully ready in memory.
+        dictionary    = DraftKeysApplication.get().wordDictionary
+        staticBigrams = DraftKeysApplication.get().staticBigrams
+
+        predictionEngine = PredictionEngine(
+            dictionary,
+            personalWordCache,          // B2: cache instead of raw DAO
+            db.bigramDao(),
+            staticBigrams,
+            db.textExpansionDao()       // D1: user-defined shortcuts
+        )
         gestureDecoder   = GestureDecoder(dictionary)
 
-        // ── Load dictionary & emojis on background thread ────────
+        // ── Load dictionary, emojis, and personal words cache on background thread ────────
         serviceScope.launch {
             val loadedEmojis = loadEmojisAsync()
             withContext(Dispatchers.Main) {
@@ -142,23 +157,12 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     emojiKeyboardView.setEmojis(emojiList)
                 }
             }
-            
-            // Start background loads
-            val dictJob = launch { dictionary.load() }
-            val indexJob = launch { 
-                dictJob.join()
-                dictionary.buildIndex() 
-            }
-            val bigramJob = launch { staticBigrams.load() }
-            
-            indexJob.join()
-            bigramJob.join()
+
+            // Only prime the personal-word cache — dictionary is already loaded
+            // by DraftKeysApplication.onCreate() on a background thread.
+            personalWordCache.prime()   // B2: load personal words into memory
         }
-            }
-            dictionary.load()
-            // Build the gesture index after a layout is available;
-            // we'll do it on first gesture request to avoid blocking startup.
-        }
+
 
         // ── System services ───────────────────────────────────────
         @Suppress("DEPRECATION")
@@ -180,6 +184,8 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
 
         draftKeysView = view.findViewById(R.id.draft_keys_view)
         draftKeysView.listener = this
+        val pulseBg = view.findViewById<com.draftkeys.keyboard.ui.PulseBackgroundView>(R.id.pulse_bg)
+        draftKeysView.onPulse = { cx, cy -> pulseBg?.spawnPulse(cx, cy) }
         
         emojiKeyboardView = view.findViewById(R.id.emoji_keyboard_view)
         emojiKeyboardView.listener = this
@@ -285,6 +291,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         draftKeysView.visibility = View.VISIBLE
         emojiKeyboardView.visibility = View.GONE
         
+        themeManager.checkAutoShuffle()
         draftKeysView.applyTheme()
         val palette = themeManager.getTheme()
         suggestionBar.applyTheme(palette)
@@ -292,11 +299,14 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         
         if (this::rootKeyboardView.isInitialized) {
             val plasmaBg = rootKeyboardView.findViewById<View>(R.id.plasma_bg)
+            val pulseBg = rootKeyboardView.findViewById<com.draftkeys.keyboard.ui.PulseBackgroundView>(R.id.pulse_bg)
+            
+            plasmaBg?.visibility = if (palette.isWild && !palette.isPulse) View.VISIBLE else View.GONE
+            pulseBg?.visibility = if (palette.isPulse) View.VISIBLE else View.GONE
+            
             if (palette.isWild) {
-                plasmaBg?.visibility = View.VISIBLE
                 rootKeyboardView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
             } else {
-                plasmaBg?.visibility = View.GONE
                 rootKeyboardView.setBackgroundColor(palette.bg)
             }
             val btnIds = listOf(R.id.btn_restore, R.id.btn_clipboard, R.id.btn_select_all, R.id.btn_copy, R.id.btn_cut)
@@ -406,9 +416,9 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         clipboardManager.unregister()
         serviceScope.cancel()
+        super.onDestroy()
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -440,6 +450,12 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         if (primaryCode != KeyboardLayout.CODE_BACKSPACE) {
             justGlided = false
             lastGlidedWordLength = 0
+        }
+
+        // Fix for "a" turning into a fullstop: only allow double-space shortcut 
+        // if the two spaces were typed consecutively without other keys in between.
+        if (primaryCode != 32) {
+            lastSpaceTime = 0L
         }
 
         when (primaryCode) {
@@ -532,11 +548,12 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 }
             }
 
-            // ── CURSOR LEFT ←  ─────────────────────────────────
-            KeyboardLayout.CODE_CURSOR_LEFT  -> moveCursor(-1)
-
-            // ── CURSOR RIGHT → ─────────────────────────────────
-            KeyboardLayout.CODE_CURSOR_RIGHT -> moveCursor(1)
+            // ── SYMBOL PAGINATION & EMOTICON ───────────────────────────
+            KeyboardLayout.CODE_SYMBOLS_PAGE_1 -> draftKeysView.switchToSymbols()
+            KeyboardLayout.CODE_SYMBOLS_PAGE_2 -> draftKeysView.switchToSymbolsMore()
+            KeyboardLayout.CODE_EMOTICON -> {
+                draftKeysView.switchToKaomoji()
+            }
 
             // ── SPACE ──────────────────────────────────────────
             32 -> {
@@ -549,21 +566,25 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                     if (typedBuffer.isNotEmpty()) { typedBuffer.deleteCharAt(typedBuffer.length - 1); typedBuffer.append(". ") }
                     activateShift()
                 } else {
-                    // Run autocorrect on the completed word before committing space
+                    // B3: Finish composing text before autocorrect runs.
+                    // commitText() on a composing region replaces it atomically — no visual flash.
+                    ic.finishComposingText()
+
                     val wordToCheck = currentWord.toString()
                     currentWord.clear() // Clear immediately to prevent race conditions
-                    
+
                     if (wordToCheck.isNotEmpty() && !isSensitiveField) {
                         autocorrectJob?.cancel()
                         autocorrectJob = serviceScope.launch {
-                            val correction = predictionEngine.autocorrect(wordToCheck)
+                            // C2: pass bigram context — autocorrect can lower threshold for known transitions
+                            val correction = predictionEngine.autocorrect(wordToCheck, lastCommittedWord)
                             if (correction != null && correction != wordToCheck) {
                                 withContext(Dispatchers.Main) {
                                     val ic2 = currentInputConnection ?: return@withContext
                                     val beforeCursor = ic2.getTextBeforeCursor(wordToCheck.length, 0)?.toString()
                                     if (beforeCursor.equals(wordToCheck, ignoreCase = true)) {
-                                        // Guard: suppress the onUpdateSelection event that
-                                        // delete+commit will fire so the cursor stays in place.
+                                        // B3: Atomic replace — no deleteSurroundingText flash.
+                                        // The composing region is already finished; commitText replaces it.
                                         suppressNextSelectionUpdate = true
                                         ic2.deleteSurroundingText(wordToCheck.length, 0)
                                         ic2.commitText("$correction ", 1)
@@ -583,13 +604,12 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                                     typedBuffer.append(' ')
                                 }
                             }
-                            // Learn the original typed word, not the correction
-                            predictionEngine.learn(wordToCheck)
-                            
+                            // Learn the final word so we don't accidentally learn and whitelist typos
                             val finalWord = correction ?: wordToCheck
+                            predictionEngine.learn(finalWord)
                             predictionEngine.learnBigram(lastCommittedWord, finalWord)
                             lastCommittedWord = finalWord
-                            
+
                             // Trigger next word suggestions after processing the space
                             if (!isSensitiveField) {
                                 updateNextWordSuggestions(correction ?: wordToCheck)
@@ -600,7 +620,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                         typedBuffer.append(' ')
                     }
                     checkAutoCapitalize()
-                    
+
                     lastCompletedWord = currentWord.toString()
                     currentWord.clear()
                     currentWordSuffixLength = 0
@@ -609,6 +629,7 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
                 justAutoSpaced = false
                 scheduleSave()
             }
+
 
             10 -> {
                 if (!isSensitiveField) serviceScope.launch { saveCurrentText() }
@@ -1112,6 +1133,74 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         startActivity(intent)
     }
 
+    private var speechRecognizer: android.speech.SpeechRecognizer? = null
+    private var isListening = false
+
+    override fun onVoiceTapped() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            toast("Opening DraftKeys to request Mic permission...")
+            val intent = android.content.Intent(this, MainActivity::class.java).apply {
+                putExtra("request_audio", true)
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+            return
+        }
+
+        if (isListening) {
+            speechRecognizer?.stopListening()
+            return
+        }
+
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            toast("Voice typing is not supported on this device.")
+            return
+        }
+
+        if (speechRecognizer == null) {
+            speechRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    isListening = true
+                    suggestionBar.setCurrentWord("Listening...")
+                    suggestionBar.clearSuggestions()
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    isListening = false
+                    suggestionBar.setCurrentWord("")
+                }
+                override fun onError(error: Int) {
+                    isListening = false
+                    suggestionBar.setCurrentWord("")
+                    toast("Voice error: $error")
+                }
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    suggestionBar.setCurrentWord("")
+                    val matches = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        val text = matches[0]
+                        currentInputConnection?.commitText("$text ", 1)
+                        typedBuffer.append("$text ")
+                        currentWord.clear()
+                        currentWordSuffixLength = 0
+                    }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
+
+        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+        }
+        speechRecognizer?.startListening(intent)
+    }
+
     private fun isSensitiveInputType(inputType: Int): Boolean {
         val variation = inputType and InputType.TYPE_MASK_VARIATION
         return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
@@ -1145,4 +1234,5 @@ class KeyboardService : InputMethodService(), KeyboardActionListener {
         }
         return emojis
     }
+
 }
